@@ -55,7 +55,7 @@ function start() {
         });
 
         pc.addTransceiver("video", { direction: "sendrecv" });
-
+        pc.addTransceiver("audio", { direction: "sendrecv" });
         pc.ontrack = (event) => {
             remoteVideo.srcObject = event.streams[0];
             status.innerText = "Streaming...";
