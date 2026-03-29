@@ -132,7 +132,8 @@ function start() {
                 if (sender.track) sender.track.enabled = true;
             });
             const offer = await pc.createOffer({
-                offerToReceiveVideo: true
+                offerToReceiveVideo: true,
+                offerToReceiveAudio: true
             });
 
             await pc.setLocalDescription(offer);
