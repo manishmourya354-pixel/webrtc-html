@@ -17,20 +17,21 @@
 let ws;
 let pc;
 
-
 function start() {
     if (pc) {
-    pc.close();
-    pc = null;
- }
-    alert("clicked"); 
+        pc.close();
+        pc = null;
+    }
+
+    alert("clicked");
+
     const status = document.getElementById("status");
     const remoteVideo = document.getElementById("remoteVideo");
     const localVideo = document.getElementById("localVideo");
-   // const video = document.getElementById("video");
-    
 
     ws = new WebSocket("wss://webrtc-server-1-m4s8.onrender.com");
+
+    // 🔵 ON OPEN
     ws.onopen = async () => {
         status.innerText = "WebSocket Connected";
 
@@ -39,17 +40,14 @@ function start() {
             room: "room1"
         }));
 
-        // 🔥 WebRTC start
         pc = new RTCPeerConnection({
             iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
         });
 
-        pc.addTransceiver("video" ,{ direction: "sendrecv" });
-       
-        // 🔥 VIDEO RECEIVE
+        pc.addTransceiver("video", { direction: "sendrecv" });
+
         pc.ontrack = (event) => {
-            console.log("REMOTE TRACK");
-             remoteVideo.srcObject = event.streams[0];
+            remoteVideo.srcObject = event.streams[0];
             status.innerText = "Streaming...";
         };
 
@@ -57,45 +55,50 @@ function start() {
             if (event.candidate) {
                 ws.send(JSON.stringify({
                     type: "candidate",
-                    data: { candidate: event.candidate.candidate,
-                sdpMid: event.candidate.sdpMid,
-                sdpMLineIndex: event.candidate.sdpMLineIndex}
+                    data: {
+                        candidate: event.candidate.candidate,
+                        sdpMid: event.candidate.sdpMid,
+                        sdpMLineIndex: event.candidate.sdpMLineIndex
+                    }
                 }));
             }
         };
-       let stream;
+
+        let stream;
         try {
-            stream = await navigator.mediaDevices.getUserMedia({ video: true,audio: true});
-            console.log("CAMERA OK");
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: true
+            });
         } catch (e) {
-            console.log("CAMERA ERROR:", e);
             alert("Camera permission issue");
             return;
         }
-        localVideo.srcObject = stream;
-        stream.getTracks().forEach(track => {
-            pc.addTrack(track, stream);});
-        status.innerText = "Ready...";
-        
 
-        // 🔥 FORCE VP8 ONLY (MOST IMPORTANT FIX)
+        localVideo.srcObject = stream;
+
+        stream.getTracks().forEach(track => {
+            pc.addTrack(track, stream);
+        });
+
+        // 🔥 VP8 FIX
         const sender = pc.getSenders().find(s => s.track && s.track.kind === "video");
         if (sender) {
             const params = sender.getParameters();
             if (params.codecs) {
                 params.codecs = params.codecs.filter(c => c.mimeType === "video/VP8");
-                sender.setParameters(params); 
-                        }
-                    }
-            status.innerText = "Ready...";
-        };
-       
-        
+                sender.setParameters(params);
+            }
+        }
 
+        status.innerText = "Ready...";
+    };
+
+    // 🟢 ON MESSAGE
     ws.onmessage = async (msg) => {
         const data = JSON.parse(msg.data);
-        
-         // 📞 Incoming call
+
+        // 📞 Incoming call
         if (data.type === "call_request") {
             let accept = confirm("Incoming Call... Accept?");
             if (accept) {
@@ -121,27 +124,47 @@ function start() {
             status.innerText = "Calling...";
         }
 
-       
-
+        // 🎯 Answer
         else if (data.type === "answer") {
             await pc.setRemoteDescription(new RTCSessionDescription(data.data));
-            document.getElementById("status").innerText = "Connected!";}
+            status.innerText = "Connected!";
+        }
+
+        // 🔁 ICE
         else if (data.type === "candidate") {
             try {
-                await pc.addIceCandidate(new RTCIceCandidate(data.data)); } catch {}         }
+                await pc.addIceCandidate(new RTCIceCandidate(data.data));
+            } catch {}
+        }
+
+        // 🛑 Stop
         else if (data.type === "stop") {
             if (pc) {
                 pc.close();
-                pc = null; }
+                pc = null;
+            }
+
             if (remoteVideo.srcObject) {
                 remoteVideo.srcObject.getTracks().forEach(t => t.stop());
-                remoteVideo.srcObject = null; }
-            if (localVideo.srcObject) { localVideo.srcObject.getTracks().forEach(t => t.stop());localVideo.srcObject = null;}
-            document.getElementById("status").innerText = "Waiting for join";} };
-     }
+                remoteVideo.srcObject = null;
+            }
+
+            if (localVideo.srcObject) {
+                localVideo.srcObject.getTracks().forEach(t => t.stop());
+                localVideo.srcObject = null;
+            }
+
+            status.innerText = "Waiting for join";
+        }
+    };
+}
+
+// 📞 CALL BUTTON
 function callPC() {
-    if (ws){
-    ws.send(JSON.stringify({ type: "call_request" }));}}
+    if (ws) {
+        ws.send(JSON.stringify({ type: "call_request" }));
+    }
+}
 </script>
    
 
