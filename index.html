@@ -9,13 +9,18 @@
 <video id="remoteVideo" autoplay playsinline style="width:45%"></video>
 <video id="localVideo" autoplay playsinline muted style="width:45%"></video>
 <button onclick="start()">START</button>
-<p id="status">Idle</p>
+<p id="status">Waiting for join</p>
 
 <script>
 let ws;
 let pc;
+document.getElementById("status").innerText = "Waiting for join";
 
 function start() {
+    if (pc) {
+    pc.close();
+    pc = null;
+}
     alert("clicked"); 
     const status = document.getElementById("status");
     const remoteVideo = document.getElementById("remoteVideo");
@@ -102,10 +107,28 @@ function start() {
         if (data.type === "candidate") {
             try {
                 await pc.addIceCandidate(new RTCIceCandidate(data.data));
-            } catch {}
+            } catch {}         
         }
-    };
-}
+        if (data.type === "stop") {
+            if (pc) {
+                pc.close();
+                pc = null;
+            }
+
+            if (remoteVideo.srcObject) {
+                remoteVideo.srcObject.getTracks().forEach(t => t.stop());
+                remoteVideo.srcObject = null;
+            }
+
+            if (localVideo.srcObject) {
+                localVideo.srcObject.getTracks().forEach(t => t.stop());
+                localVideo.srcObject = null;
+            }
+
+            document.getElementById("status").innerText = "Waiting for join";
+        }
+            };
+        }
 </script>
    
 
