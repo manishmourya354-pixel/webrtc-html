@@ -22,7 +22,7 @@ function start() {
     if (pc) {
     pc.close();
     pc = null;
-}
+ }
     alert("clicked"); 
     const status = document.getElementById("status");
     const remoteVideo = document.getElementById("remoteVideo");
@@ -73,10 +73,10 @@ function start() {
             return;
         }
         localVideo.srcObject = stream;
-        stream.getTracks().forEach(track => 
-            pc.addTrack(track, stream));
-            status.innerText = "Ready...";
-        };
+        stream.getTracks().forEach(track => {
+            pc.addTrack(track, stream);});
+        status.innerText = "Ready...";
+        
 
         // 🔥 FORCE VP8 ONLY (MOST IMPORTANT FIX)
         const sender = pc.getSenders().find(s => s.track && s.track.kind === "video");
@@ -84,7 +84,11 @@ function start() {
             const params = sender.getParameters();
             if (params.codecs) {
                 params.codecs = params.codecs.filter(c => c.mimeType === "video/VP8");
-                sender.setParameters(params); }}
+                sender.setParameters(params); 
+                        }
+                    }
+            status.innerText = "Ready...";
+        };
        
         
 
@@ -133,8 +137,8 @@ function start() {
                 remoteVideo.srcObject.getTracks().forEach(t => t.stop());
                 remoteVideo.srcObject = null; }
             if (localVideo.srcObject) { localVideo.srcObject.getTracks().forEach(t => t.stop());localVideo.srcObject = null;}
-            document.getElementById("status").innerText = "Waiting for join";} };}
-        
+            document.getElementById("status").innerText = "Waiting for join";} };
+     }
 function callPC() {
     if (ws){
     ws.send(JSON.stringify({ type: "call_request" }));}}
