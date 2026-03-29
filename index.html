@@ -18,6 +18,10 @@ let ws;
 let pc;
 
 function start() {
+     if (ws) {
+        ws.close();
+        ws = null;
+    }
     if (pc) {
         pc.close();
         pc = null;
@@ -143,11 +147,15 @@ function start() {
 
         // 🛑 Stop
         else if (data.type === "stop") {
-            if (pc) {
-                 pc.getSenders().forEach(sender => {
-                    if (sender.track) sender.track.enabled = false;
-        });
-    }                       
+             if (pc) {
+                    pc.close();
+                    pc = null;
+             }
+
+             if (ws) {
+                        ws.close();
+                        ws = null;
+             }                                   
             if (remoteVideo.srcObject) {
                 remoteVideo.srcObject.getTracks().forEach(t => t.stop());
                 remoteVideo.srcObject = null;
