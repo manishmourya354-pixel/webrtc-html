@@ -110,6 +110,10 @@ function start() {
 
         // ✅ Call accepted → START OFFER
         else if (data.type === "call_accept") {
+
+            pc.getSenders().forEach(sender => {
+                if (sender.track) sender.track.enabled = true;
+            });
             const offer = await pc.createOffer({
                 offerToReceiveVideo: true
             });
@@ -120,7 +124,7 @@ function start() {
                 type: "offer",
                 data: offer
             }));
-
+           
             status.innerText = "Calling...";
         }
 
@@ -141,18 +145,13 @@ function start() {
         else if (data.type === "stop") {
             if (pc) {
                  pc.getSenders().forEach(sender => {
-            if (sender.track) sender.track.stop();
+                    if (sender.track) sender.track.enabled = false;
         });
     }                       
             if (remoteVideo.srcObject) {
                 remoteVideo.srcObject.getTracks().forEach(t => t.stop());
                 remoteVideo.srcObject = null;
-            }
-                 
-            if (localVideo.srcObject) {
-                localVideo.srcObject.getTracks().forEach(t => t.stop());
-                localVideo.srcObject = null;
-            }
+            }                    
             status.innerText = "Call Stopped (Connected)";
            
         }
