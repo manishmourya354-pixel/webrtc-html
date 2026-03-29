@@ -9,12 +9,13 @@
 <video id="remoteVideo" autoplay playsinline style="width:45%"></video>
 <video id="localVideo" autoplay playsinline muted style="width:45%"></video>
 <button onclick="start()">START</button>
+<button onclick="callPC()">CALL PC</button>
 <p id="status">Waiting for join</p>
 
 <script>
 let ws;
 let pc;
-document.getElementById("status").innerText = "Waiting for join";
+
 
 function start() {
     if (pc) {
@@ -82,53 +83,50 @@ function start() {
             if (params.codecs) {
                 params.codecs = params.codecs.filter(c => c.mimeType === "video/VP8");
                 sender.setParameters(params); }}
-     
-        const offer = await pc.createOffer({
-          offerToReceiveVideo: true
-        });
-        await pc.setLocalDescription(offer);
-        console.log("SENDING OFFER");
-        ws.send(JSON.stringify({
-            type: "offer",
-            data: offer
-        }));
-
-        status.innerText = "Offer sent...";
-    };
+       
+        
 
     ws.onmessage = async (msg) => {
         const data = JSON.parse(msg.data);
+         if (data.type === "call_accept") {
+            const offer = await pc.createOffer({
+                offerToReceiveVideo: true
+            });
+
+            await pc.setLocalDescription(offer);
+
+            ws.send(JSON.stringify({
+                type: "offer",
+                data: offer
+            }));
+
+            document.getElementById("status").innerText = "Offer sent...";
+        }
+
+        if (data.type === "call_request") {
+            let accept = confirm("Incoming Call... Accept?");
+            if (accept) {
+                ws.send(JSON.stringify({ type: "call_accept" }));} else {ws.send(JSON.stringify({ type: "call_reject" }));}}
 
         if (data.type === "answer") {
             await pc.setRemoteDescription(new RTCSessionDescription(data.data));
-            document.getElementById("status").innerText = "Connected!";
-        }
-
+            document.getElementById("status").innerText = "Connected!";}
         if (data.type === "candidate") {
             try {
-                await pc.addIceCandidate(new RTCIceCandidate(data.data));
-            } catch {}         
-        }
+                await pc.addIceCandidate(new RTCIceCandidate(data.data)); } catch {}         }
         if (data.type === "stop") {
             if (pc) {
                 pc.close();
-                pc = null;
-            }
-
+                pc = null; }
             if (remoteVideo.srcObject) {
                 remoteVideo.srcObject.getTracks().forEach(t => t.stop());
-                remoteVideo.srcObject = null;
-            }
-
-            if (localVideo.srcObject) {
-                localVideo.srcObject.getTracks().forEach(t => t.stop());
-                localVideo.srcObject = null;
-            }
-
-            document.getElementById("status").innerText = "Waiting for join";
-        }
-            };
-        }
+                remoteVideo.srcObject = null; }
+            if (localVideo.srcObject) { localVideo.srcObject.getTracks().forEach(t => t.stop());localVideo.srcObject = null;}
+            document.getElementById("status").innerText = "Waiting for join";} };
+        
+function callPC() {
+    ws.send(JSON.stringify({ type: "call_request" }));
+}
 </script>
    
 
