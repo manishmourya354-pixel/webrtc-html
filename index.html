@@ -12,6 +12,9 @@
 <button onclick="start()">START</button>
 <button onclick="callPC()">CALL PC</button>
 <p id="status">Waiting for join</p>
+<div id="log" style="font-size:12px;color:yellow;"></div>
+
+<button onclick="unlockAudio()">UNLOCK AUDIO</button>
 
 <script>
 let ws;
@@ -20,6 +23,10 @@ let pingInterval = null;
 
 let reconnectTimeout = null;
 let reconnectAttempts = 0;
+function log(msg) {
+    console.log(msg);
+    document.getElementById("log").innerHTML += msg + "<br>";
+}
 // 🔁 RECONNECT LOGIC
 function reconnect() {
     if (reconnectTimeout) return;
@@ -91,19 +98,20 @@ function start() {
         pc.addTransceiver("video", { direction: "sendrecv" });
         pc.addTransceiver("audio", { direction: "sendrecv" });
         pc.ontrack = (event) => {
-           console.log("TRACK:", event.track.kind);
-           if (!remoteVideo.srcObject) {
-                remoteVideo.srcObject = event.streams[0];
-            }
+           log("TRACK: " + event.track.kind);          
+            remoteVideo.srcObject = event.streams[0];
+            
 
             // 🔊 ensure audio plays
             if (event.track.kind === "audio") {
+                  log("🔊 AUDIO TRACK RECEIVED");
+
                 remoteVideo.muted = false;
 
                 setTimeout(() => {
-                    remoteVideo.play().catch(e => {
-                        console.log("Play blocked:", e);
-                    });
+                    remoteVideo.play()
+                     .then(() => log("✅ AUDIO PLAYING"))
+                     .catch(e => log("❌ PLAY BLOCKED: " + e)); 
                 }, 100);
             }              
             status.innerText = "Streaming...";
@@ -231,19 +239,31 @@ function start() {
                 ws = null;
              }                     
            
-            if (remoteVideo.srcObject) {
+             if (remoteVideo.srcObject) {
                 remoteVideo.srcObject.getTracks().forEach(t => t.stop());
                 remoteVideo.srcObject = null;
             }
-            if (localVideo.srcObject) {
+             if (localVideo.srcObject) {
                 localVideo.srcObject.getTracks().forEach(t => t.stop());
                 localVideo.srcObject = null;
             }                    
             status.innerText = "Reconnecting...";
-            reconnect();
-           
-            }
+            reconnect();          
+        }
     };
+}
+
+
+function unlockAudio() {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    audioContext.resume();
+
+    const video = document.getElementById("remoteVideo");
+    video.muted = false;
+
+    video.play()
+        .then(() => log("🔓 Audio unlocked"))
+        .catch(e => log("❌ Unlock failed: " + e));
 }
 
 // 📞 CALL BUTTON
