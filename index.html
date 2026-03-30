@@ -20,7 +20,7 @@
 let ws;
 let pc;
 let pingInterval = null;
-
+let remoteStream = new MediaStream();
 let reconnectTimeout = null;
 let reconnectAttempts = 0;
 function log(msg) {
