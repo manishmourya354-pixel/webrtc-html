@@ -92,15 +92,20 @@ function start() {
         pc.addTransceiver("audio", { direction: "sendrecv" });
         pc.ontrack = (event) => {
            console.log("TRACK:", event.track.kind);
+           if (!remoteVideo.srcObject) {
+                remoteVideo.srcObject = event.streams[0];
+            }
+
+            // 🔊 ensure audio plays
             if (event.track.kind === "audio") {
-                console.log("✅ AUDIO TRACK RECEIVED");
-            }
-            if (!remoteVideo.srcObject) {
-            remoteVideo.srcObject = event.streams[0];
-            }
-            remoteVideo.play().catch(e => {
-                console.log("Play blocked:", e);
-            });
+                remoteVideo.muted = false;
+
+                setTimeout(() => {
+                    remoteVideo.play().catch(e => {
+                        console.log("Play blocked:", e);
+                    });
+                }, 100);
+            }              
             status.innerText = "Streaming...";
         };
         pc.onconnectionstatechange = () => {
