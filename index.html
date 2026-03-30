@@ -20,7 +20,7 @@
 let ws;
 let pc;
 let pingInterval = null;
-let remoteStream = new MediaStream();
+let remoteStream = null;
 let reconnectTimeout = null;
 let reconnectAttempts = 0;
 function log(msg) {
@@ -98,9 +98,14 @@ function start() {
         pc.addTransceiver("video", { direction: "sendrecv" });
         pc.addTransceiver("audio", { direction: "sendrecv" });
         pc.ontrack = (event) => {
-           log("TRACK: " + event.track.kind);  
-           remoteStream.addTrack(event.track);        
-            remoteVideo.srcObject = remoteStreams;         
+           log("TRACK: " + event.track.kind); 
+            if (!remoteStream) {
+                 remoteStream = new MediaStream(); 
+            }
+            remoteStream.addTrack(event.track);        
+            remoteVideo.srcObject = remoteStreams;  
+            remoteVideo.play().catch(() => {});
+     
             // 🔊 ensure audio plays
             if (event.track.kind === "audio") {
                   log("🔊 AUDIO TRACK RECEIVED");
@@ -140,6 +145,7 @@ function start() {
                 video: true,
                 audio: true
             });
+            log("📷 Local tracks: " + stream.getTracks().map(t => t.kind).join(","));
         } catch (e) {
             alert("Camera permission issue");
             return;
