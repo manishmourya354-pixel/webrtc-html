@@ -18,8 +18,28 @@ let ws;
 let pc;
 let pingInterval = null;
 
+let reconnectTimeout = null;
+let reconnectAttempts = 0;
+// 🔁 RECONNECT LOGIC
+function reconnect() {
+    if (reconnectTimeout) return;
+
+    reconnectAttempts++;
+    console.log("Reconnecting attempt:", reconnectAttempts);
+
+    reconnectTimeout = setTimeout(() => {
+        reconnectTimeout = null;
+        start();
+    }, Math.min(5000, reconnectAttempts * 1000));
+}
 
 function start() {
+    reconnectAttempts = 0;
+
+    if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
+    }
     if (pingInterval) {
         clearInterval(pingInterval);
         pingInterval = null;
@@ -37,8 +57,22 @@ function start() {
     const remoteVideo = document.getElementById("remoteVideo");
     const localVideo = document.getElementById("localVideo");
 
-    ws = new WebSocket("wss://webrtc-server-1-m4s8.onrender.com");
+       // 🔊 AUDIO FIX
+    remoteVideo.muted = false;
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    audioContext.resume();
 
+    ws = new WebSocket("wss://webrtc-server-1-m4s8.onrender.com");
+    ws.onclose = () => {
+    console.log("WS CLOSED");
+    status.innerText = "Disconnected";
+    reconnect();
+    };
+
+    ws.onerror = (e) => {
+        console.log("WS ERROR", e);
+        reconnect();
+    };
     // 🔵 ON OPEN
     ws.onopen = async () => {
         status.innerText = "WebSocket Connected";
@@ -57,8 +91,23 @@ function start() {
         pc.addTransceiver("video", { direction: "sendrecv" });
         pc.addTransceiver("audio", { direction: "sendrecv" });
         pc.ontrack = (event) => {
+           console.log("TRACK:", event.track.kind);
+            if (event.track.kind === "audio") {
+                console.log("✅ AUDIO TRACK RECEIVED");
+            }
+            if (!remoteVideo.srcObject) {
             remoteVideo.srcObject = event.streams[0];
+            }
+            remoteVideo.play().catch(e => {
+                console.log("Play blocked:", e);
+            });
             status.innerText = "Streaming...";
+        };
+        pc.onconnectionstatechange = () => {
+            console.log("PC State:", pc.connectionState);
+            if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+                reconnect();
+            }
         };
 
         pc.onicecandidate = (event) => {
@@ -102,8 +151,7 @@ function start() {
 
         status.innerText = "Ready...";
         
-        if (pingInterval) {
-        clearInterval(pingInterval);}
+        
         pingInterval = setInterval(() => {
             if (ws && ws.readyState === 1) {
                     ws.send(JSON.stringify({ type: "ping" }));
@@ -111,6 +159,7 @@ function start() {
          }, 15000);
     };
 
+   
     // 🟢 ON MESSAGE
     ws.onmessage = async (msg) => {
         const data = JSON.parse(msg.data);
@@ -161,6 +210,7 @@ function start() {
 
         // 🛑 Stop
         else if (data.type === "stop") {
+             console.log("STOP RECEIVED");
              if (pingInterval) {
                 clearInterval(pingInterval);
                 pingInterval = null;
@@ -171,9 +221,11 @@ function start() {
                 pc = null;
             }      
              if (ws) {
-                        ws.close();
-                        ws = null;
-             }                                   
+                ws.onclose = null;
+                ws.close();
+                ws = null;
+             }                     
+           
             if (remoteVideo.srcObject) {
                 remoteVideo.srcObject.getTracks().forEach(t => t.stop());
                 remoteVideo.srcObject = null;
@@ -183,9 +235,8 @@ function start() {
                 localVideo.srcObject = null;
             }                    
             status.innerText = "Reconnecting...";
-            setTimeout(() => {
-                    start();
-                }, 1000);
+            reconnect();
+           
             }
     };
 }
