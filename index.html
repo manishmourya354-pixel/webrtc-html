@@ -98,10 +98,9 @@ function start() {
         pc.addTransceiver("video", { direction: "sendrecv" });
         pc.addTransceiver("audio", { direction: "sendrecv" });
         pc.ontrack = (event) => {
-           log("TRACK: " + event.track.kind);          
-            remoteVideo.srcObject = event.streams[0];
-            
-
+           log("TRACK: " + event.track.kind);  
+           remoteStream.addTrack(event.track);        
+            remoteVideo.srcObject = remoteStreams;         
             // 🔊 ensure audio plays
             if (event.track.kind === "audio") {
                   log("🔊 AUDIO TRACK RECEIVED");
