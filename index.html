@@ -6,7 +6,7 @@
 <body style="background:black;color:white;text-align:center;">
 
 <h2>WebRTC Test</h2>
-<video id="remoteVideo" autoplay playsinline controls style="width:45%"></video>
+<video id="remoteVideo" autoplay playsinline style="width:45%"></video>
 <video id="localVideo" autoplay playsinline muted style="width:45%"></video>
 <br><br>
 <button onclick="start()">START</button>
@@ -148,6 +148,18 @@ function start() {
                 }));
             }
         };
+        pc.onnegotiationneeded = async () => {
+            try {
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                ws.send(JSON.stringify({
+                    type: "offer",
+                    data: pc.localDescription
+                }));
+            } catch (err) {
+                log("Negotiation Error: " + err);
+            }
+        };
         let stream;
         try {
             stream = await navigator.mediaDevices.getUserMedia({
@@ -225,7 +237,29 @@ function start() {
            
             status.innerText = "Calling...";
         }
+        // 📥 OFFER RECEIVE
+        else if (data.type === "offer") {
+            await pc.setRemoteDescription(new RTCSessionDescription(data.data));
 
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+
+            ws.send(JSON.stringify({
+                type: "answer",
+                data: answer
+            }));
+
+            status.innerText = "Answer sent";
+        }
+        else if (data.type === "offer") {
+            await pc.setRemoteDescription(new RTCSessionDescription(data.data));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            ws.send(JSON.stringify({
+                type: "answer",
+                data: pc.localDescription
+            }));
+        }
         // 🎯 Answer
         else if (data.type === "answer") {
             await pc.setRemoteDescription(new RTCSessionDescription(data.data));
@@ -293,13 +327,18 @@ function callPC() {
 window.onload = () => {
     start();
 
-    // 🔊 audio unlock on first click
-    document.body.addEventListener("click", () => {
+    document.body.addEventListener("click", async () => {
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        audioContext.resume();
-        console.log("🔓 Audio unlocked");
+        await audioContext.resume();
+
+        const video = document.getElementById("remoteVideo");
+        video.muted = false;
+        await video.play();
+
+        console.log("🔊 Audio forced play");
     });
 };
+
 </script>
    
 
