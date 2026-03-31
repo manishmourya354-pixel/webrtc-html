@@ -99,9 +99,11 @@ function start() {
         pc.addTransceiver("audio", { direction: "sendrecv" });
         pc.ontrack = (event) => {
            log("TRACK: " + event.track.kind); 
+           
             if (!remoteStream) {
-                 remoteStream = new MediaStream(); 
+                remoteStream = new MediaStream();
             }
+           
             remoteStream.addTrack(event.track);        
             remoteVideo.srcObject = remoteStream;  
             remoteVideo.play().catch(() => {});
@@ -143,7 +145,11 @@ function start() {
         try {
             stream = await navigator.mediaDevices.getUserMedia({
                 video: true,
-                audio: true
+                audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                }
             });
             log("📷 Local tracks: " + stream.getTracks().map(t => t.kind).join(","));
         } catch (e) {
@@ -279,6 +285,13 @@ function callPC() {
 }
 window.onload = () => {
     start();
+
+    // 🔊 audio unlock on first click
+    document.body.addEventListener("click", () => {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        audioContext.resume();
+        console.log("🔓 Audio unlocked");
+    });
 };
 </script>
    
