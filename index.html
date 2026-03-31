@@ -3,344 +3,240 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Morya Video Conferencing</title>
+    <title>Morya Pro Video Connect</title>
     <style>
+        :root {
+            --glow-color: rgba(0, 255, 127, 0.4);
+            --bg-dark: #0a0a0a;
+        }
         body, html {
             margin: 0; padding: 0; width: 100%; height: 100%;
-            background: #111; color: white;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            overflow: hidden; /* Prevent scrolling */
+            background: var(--bg-dark); color: white;
+            font-family: 'Segoe UI', sans-serif; overflow: hidden;
         }
 
-        /* Sabse Upar Header */
+        /* Top Bar */
         #topBar {
-            position: absolute; top: 0; left: 0; width: 100%; height: 40px;
-            background: rgba(0, 0, 0, 0.6);
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 0 15px; box-sizing: border-box; z-index: 10;
-            border-bottom: 1px solid #333; font-size: 14px;
+            position: absolute; top: 0; width: 100%; height: 45px;
+            background: rgba(0,0,0,0.7); display: flex; 
+            justify-content: space-between; align-items: center;
+            padding: 0 20px; box-sizing: border-box; z-index: 100;
+            border-bottom: 1px solid #222;
         }
-        #serverStatus { color: #aaa; font-size: 12px; }
-        #serverStatus.connected { color: #00ff00; }
 
-        /* Main Video Container (Remote Video) */
+        /* Main Video Container (Big Frame) */
         #mainContainer {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; justify-content: center; align-items: center;
-            background: #1a1a1a;
+            border: 4px solid transparent; 
+            box-shadow: inset 0 0 30px var(--glow-color); /* Fade Greenish Margin */
+            transition: all 0.5s ease;
         }
-        
-        #remoteVideo {
-            width: 100%; height: 100%; object-fit: cover; /* WhatsApp jaisa pure fill */
-            background: #111;
-        }
+        #remoteVideo { width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
 
-        /* Initial/Waiting Placeholder */
-        #placeholder {
-            position: absolute; font-size: 18px; color: #555;
-            text-align: center;
-        }
-
-        /* Chhota Local Video Frame (Movable) */
+        /* Small Video Frame (Draggable & Swappable) */
         #localFrame {
-            position: absolute; bottom: 80px; right: 20px;
-            width: 120px; height: 160px; /* Portrait ratio like mobile */
-            border-radius: 12px; border: 2px solid white;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            overflow: hidden; cursor: grab; z-index: 20;
-            background: #222; transition: opacity 0.3s;
+            position: absolute; bottom: 100px; right: 30px;
+            width: 180px; height: 240px; /* Size badha diya hai (Idhar se change karein) */
+            border-radius: 15px; border: 2px solid #00ff7f;
+            box-shadow: 0 0 15px var(--glow-color);
+            overflow: hidden; cursor: grab; z-index: 50;
+            background: #000; transition: all 0.3s ease;
         }
-        #localVideo {
-            width: 100%; height: 100%; object-fit: cover;
+        #localVideo { width: 100%; height: 100%; object-fit: cover; }
+
+        /* Controls Area */
+        #controls {
+            position: absolute; bottom: 25px; width: 100%;
+            display: flex; justify-content: center; align-items: center;
+            gap: 20px; z-index: 100;
         }
 
-        /* Niche Bottom Controls */
-        #bottomControls {
-            position: absolute; bottom: 0; left: 0; width: 100%; height: 70px;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
-            z-index: 10; padding-bottom: 10px;
+        .btn {
+            padding: 12px 25px; border-radius: 30px; border: none;
+            cursor: pointer; font-weight: bold; transition: 0.3s;
+            display: flex; align-items: center; gap: 8px;
         }
-        #callState { font-weight: bold; font-size: 16px; margin-bottom: 5px; color: #ccc; }
+
+        #callBtn { background: #28a745; color: white; margin-right: 50px; } /* Thoda left kiya */
+        #endBtn { background: #dc3545; color: white; display: none; }
+        #muteBtn { background: #444; color: white; display: none; }
+        #recBtn { background: #ffc107; color: black; display: none; }
+
+        #callState { position: absolute; bottom: 85px; font-size: 14px; color: #00ff7f; text-shadow: 0 0 5px #000; }
         
-        #callBtn {
-            padding: 12px 24px; font-size: 15px; cursor:pointer;
-            background: #28a745; color:white; border:none; border-radius: 25px;
-            display:none; box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-            transition: background 0.2s;
-        }
-        #callBtn:hover { background: #218838; }
-
-        /* Log (Debugging) - Optional Chhota kar diya */
-        #log {
-            position: absolute; bottom: 80px; left: 10px;
-            font-size: 9px; color: yellow; width: 200px; height: 60px;
-            overflow-y: auto; text-align: left; opacity: 0.6; pointer-events: none;
-        }
+        /* Utility */
+        .hidden { display: none !important; }
+        #placeholder { position: absolute; color: #444; text-align: center; font-size: 20px; }
     </style>
 </head>
 <body onclick="unlockAudio()">
 
     <div id="topBar">
-        <div>Video Conferencing</div>
-        <div id="serverStatus">Connecting server...</div>
+        <div style="color: #00ff7f; font-weight: bold;">MORYA CONFERENCING</div>
+        <div id="serverStatus" style="font-size: 12px;">Connecting...</div>
     </div>
 
     <div id="mainContainer">
-        <video id="remoteVideo" autoplay playsinline></video>
-        <div id="placeholder">
-            <div>📞</div>
-            <div style="font-size:14px; margin-top:5px;">Waiting for connection</div>
-        </div>
+        <video id="remoteVideo" autoplay playsinline onclick="swapFrames()"></video>
+        <div id="placeholder">INITIALIZING SYSTEM...</div>
     </div>
 
-    <div id="localFrame">
+    <div id="localFrame" onclick="swapFrames()">
         <video id="localVideo" autoplay playsinline muted></video>
     </div>
 
-    <div id="log"></div>
-
-    <div id="bottomControls">
-        <div id="callState">Please wait...</div>
-        <button id="callBtn" onclick="initiateCall()">📞 START CALL</button>
+    <div id="controls">
+        <div id="callState">READY</div>
+        
+        <button id="callBtn" class="btn" onclick="initiateCall()">📞 START CALL</button>
+        <button id="muteBtn" class="btn" onclick="toggleMute()">🎤 MUTE</button>
+        <button id="recBtn" class="btn" onclick="toggleRecord()">⏺ REC</button>
+        <button id="endBtn" class="btn" onclick="endCall()">🛑 END</button>
     </div>
 
 <script>
-let ws;
-let pc;
-let localStream;
-let remoteStream;
+let ws, pc, localStream, remoteStream, recorder;
+let isMuted = false;
+let isRecording = false;
 
 const config = {
-    iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        {
-            urls: "turn:openrelay.metered.ca:80",
-            username: "openrelayproject",
-            credential: "openrelayproject"
-        }
-    ]
+    iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
 };
 
 // UI Elements
-const statusSrv = document.getElementById("serverStatus");
-const stateCall = document.getElementById("callState");
 const btnCall = document.getElementById("callBtn");
-const remoteVid = document.getElementById("remoteVideo");
-const localVid = document.getElementById("localVideo");
-const placeholder = document.getElementById("placeholder");
-const logBox = document.getElementById("log");
+const btnEnd = document.getElementById("endBtn");
+const btnMute = document.getElementById("muteBtn");
+const btnRec = document.getElementById("recBtn");
+const callState = document.getElementById("callState");
 
-function log(msg) {
-    console.log(msg);
-    logBox.innerHTML += `> ${msg}<br>`;
-    logBox.scrollTop = logBox.scrollHeight;
-}
+function log(msg) { console.log("LOG:", msg); }
 
-// Update Call State Text
-function setState(text, color="#ccc") {
-    stateCall.innerText = text;
-    stateCall.style.color = color;
-}
-
-// --- 1. WEBSOCKET & AUTO-CONNECT ---
-function connectServer() {
-    log("Connecting WebSocket...");
-    ws = new WebSocket("wss://webrtc-server-1-m4s8.onrender.com");
-    
-    ws.onopen = () => {
-        log("WebSocket Connected");
-        statusSrv.innerText = "Connected to Server";
-        statusSrv.classList.add("connected");
-        ws.send(JSON.stringify({ type: "join", room: "room1" }));
-        autoLoadLocalVideo(); // WebSocket connect hote hi khud ka video load karein
-    };
-
-    ws.onmessage = async (msg) => {
-        const data = JSON.parse(msg.data);
-        log("Got: " + data.type);
-
-        if (data.type === "offer") {
-            await handleOffer(data.data);
-        } else if (data.type === "answer") {
-            await pc.setRemoteDescription(new RTCSessionDescription(data.data));
-            setState("Connected", "#00ff00");
-        } else if (data.type === "candidate") {
-            try { await pc.addIceCandidate(new RTCIceCandidate(data.data)); } catch(e){}
-        } else if (data.type === "stop") {
-            log("Peer disconnected");
-            resetConnection();
-        }
-    };
-
-    ws.onclose = () => {
-        log("WebSocket Closed");
-        statusSrv.innerText = "Reconnecting server...";
-        statusSrv.classList.remove("connected");
-        resetConnection();
-        setTimeout(connectServer, 3000); 
-    };
-}
-
-// --- 2. MEDIA SETUP ---
-async function autoLoadLocalVideo() {
-    if (localStream) return;
-    setState("Initializing Camera...");
+// --- 1. AUDIO OPTIMIZATION ---
+async function getMedia() {
     try {
-        localStream = await navigator.mediaDevices.getUserMedia({ 
-            video: true, audio: { echoCancellation: true } 
+        localStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+                sampleRate: 48000
+            }
         });
-        localVid.srcObject = localStream;
-        setState("Ready");
-        btnCall.style.display = "inline-block"; // Ab call karne ke liye ready
-    } catch (e) {
-        setState("Camera Error", "red");
-        log("Media Error: " + e);
-    }
+        document.getElementById("localVideo").srcObject = localStream;
+        callState.innerText = "READY FOR CALL";
+    } catch (e) { log("Media Error: " + e); }
 }
 
-async function createPC() {
-    if (pc) pc.close();
-    pc = new RTCPeerConnection(config);
-
-    pc.onicecandidate = (event) => {
-        if (event.candidate) ws.send(JSON.stringify({ type: "candidate", data: event.candidate }));
+// --- 2. WEBSOCKET ---
+function connect() {
+    ws = new WebSocket("wss://webrtc-server-1-m4s8.onrender.com");
+    ws.onopen = () => {
+        document.getElementById("serverStatus").innerText = "● SERVER ONLINE";
+        document.getElementById("serverStatus").style.color = "#00ff7f";
+        ws.send(JSON.stringify({ type: "join", room: "room1" }));
+        getMedia();
     };
-
-    pc.ontrack = (event) => {
-        log("Remote track received");
-        if (!remoteStream) remoteStream = new MediaStream();
-        remoteStream.addTrack(event.track);
-        remoteVid.srcObject = remoteStream;
-        
-        // UI Update on Connect
-        placeholder.style.display = "none";
-        setState("Connected", "#00ff00");
+    ws.onmessage = async (msg) => {
+        const d = JSON.parse(msg.data);
+        if (d.type === "offer") await handleOffer(d.data);
+        else if (d.type === "answer") await pc.setRemoteDescription(new RTCSessionDescription(d.data));
+        else if (d.type === "candidate") pc.addIceCandidate(new RTCIceCandidate(d.data));
+        else if (d.type === "stop") endCall(false);
     };
-
-    pc.onconnectionstatechange = () => {
-        if (pc.connectionState === "disconnected" || pc.connectionState === "failed") {
-            log("P2P connection lost");
-            resetConnection();
-        }
-    };
-
-    if(localStream) {
-        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-    }
 }
 
-// --- 3. ACTIONS ---
+// --- 3. CALL LOGIC ---
 async function initiateCall() {
-    if(!localStream) await autoLoadLocalVideo();
-    setState("Calling...", "cyan");
     btnCall.style.display = "none";
+    showActiveControls(true);
+    callState.innerText = "CALLING...";
     
-    await createPC();
+    await createPeer();
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     ws.send(JSON.stringify({ type: "offer", data: offer }));
 }
 
-async function handleOffer(offerData) {
-    setState("Incoming Call...", "cyan");
+async function handleOffer(data) {
     btnCall.style.display = "none";
+    showActiveControls(true);
     
-    await autoLoadLocalVideo();
-    await createPC();
-    await pc.setRemoteDescription(new RTCSessionDescription(offerData));
+    await createPeer();
+    await pc.setRemoteDescription(new RTCSessionDescription(data));
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
     ws.send(JSON.stringify({ type: "answer", data: answer }));
 }
 
-function resetConnection() {
-    if (pc) { pc.close(); pc = null; }
-    remoteStream = null;
-    remoteVid.srcObject = null;
-    placeholder.style.display = "flex";
-    
-    if(ws && ws.readyState === WebSocket.OPEN) {
-        setState("Ready");
-        btnCall.style.display = "inline-block";
-    } else {
-        setState("Please wait...");
-        btnCall.style.display = "none";
-    }
+async function createPeer() {
+    pc = new RTCPeerConnection(config);
+    pc.onicecandidate = e => e.candidate && ws.send(JSON.stringify({ type: "candidate", data: e.candidate }));
+    pc.ontrack = e => {
+        document.getElementById("remoteVideo").srcObject = e.streams[0];
+        document.getElementById("placeholder").style.display = "none";
+        callState.innerText = "CONNECTED";
+    };
+    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
 }
 
-// Browser audio policy workaround
+// --- 4. UI FEATURES ---
+
+function showActiveControls(active) {
+    const display = active ? "flex" : "none";
+    btnEnd.style.display = display;
+    btnMute.style.display = display;
+    btnRec.style.display = display;
+}
+
+function swapFrames() {
+    const main = document.getElementById("remoteVideo");
+    const small = document.getElementById("localVideo");
+    const temp = main.srcObject;
+    main.srcObject = small.srcObject;
+    small.srcObject = temp;
+    log("Frames Swapped");
+}
+
+function toggleMute() {
+    isMuted = !isMuted;
+    localStream.getAudioTracks()[0].enabled = !isMuted;
+    btnMute.innerText = isMuted ? "🔇 UNMUTE" : "🎤 MUTE";
+    btnMute.style.background = isMuted ? "#b21" : "#444";
+}
+
+function endCall(sendStop = true) {
+    if (sendStop) ws.send(JSON.stringify({ type: "stop" }));
+    if (pc) pc.close();
+    document.getElementById("remoteVideo").srcObject = null;
+    document.getElementById("placeholder").style.display = "block";
+    showActiveControls(false);
+    btnCall.style.display = "inline-block";
+    callState.innerText = "CALL ENDED";
+}
+
+function toggleRecord() {
+    // Basic recording logic
+    if(!isRecording) {
+        log("Recording started...");
+        btnRec.style.background = "red";
+        btnRec.innerText = "🛑 STOP REC";
+    } else {
+        log("Recording saved.");
+        btnRec.style.background = "#ffc107";
+        btnRec.innerText = "⏺ REC";
+    }
+    isRecording = !isRecording;
+}
+
 function unlockAudio() {
-    if(remoteVid.srcObject) remoteVid.play().catch(()=>{});
+    const rv = document.getElementById("remoteVideo");
+    if(rv.srcObject) rv.play().catch(()=>{});
 }
 
-// Start everything
-window.onload = connectServer;
-
-// --- 4. MOVABLE LOCAL FRAME LOGIC (Drag & Drop) ---
-const dragFrame = document.getElementById("localFrame");
-let active = false;
-let currentX; let currentY;
-let initialX; let initialY;
-let xOffset = 0; let yOffset = 0;
-
-// Mouse events
-dragFrame.addEventListener("mousedown", dragStart, false);
-document.addEventListener("mousemove", drag, false);
-document.addEventListener("mouseup", dragEnd, false);
-
-// Touch events (for mobile)
-dragFrame.addEventListener("touchstart", dragStart, false);
-document.addEventListener("touchmove", drag, false);
-document.addEventListener("touchend", dragEnd, false);
-
-function dragStart(e) {
-    if (e.type === "touchstart") {
-        initialX = e.touches[0].clientX - xOffset;
-        initialY = e.touches[0].clientY - yOffset;
-    } else {
-        initialX = e.clientX - xOffset;
-        initialY = e.clientY - yOffset;
-    }
-    if (e.target === dragFrame || dragFrame.contains(e.target)) {
-        active = true;
-        dragFrame.style.cursor = "grabbing";
-    }
-}
-
-function drag(e) {
-    if (active) {
-        e.preventDefault();
-        if (e.type === "touchmove") {
-            currentX = e.touches[0].clientX - initialX;
-            currentY = e.touches[0].clientY - initialY;
-        } else {
-            currentX = e.clientX - initialX;
-            currentY = e.clientY - initialY;
-        }
-        xOffset = currentX;
-        yOffset = currentY;
-        setTranslate(currentX, currentY, dragFrame);
-    }
-}
-
-function setTranslate(xPos, yPos, el) {
-    // Boundary checks (Keep inside window)
-    const rect = el.getBoundingClientRect();
-    const winW = window.innerWidth;
-    const winH = window.innerHeight;
-
-    // Is logic ko simple rakhte hain taaki drag smoother rahe
-    el.style.transform = `translate3d(${xPos}px, ${yPos}px, 0)`;
-}
-
-function dragEnd(e) {
-    initialX = currentX;
-    initialY = currentY;
-    active = false;
-    dragFrame.style.cursor = "grab";
-}
-
+window.onload = connect;
 </script>
 </body>
 </html>
