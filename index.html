@@ -1,32 +1,115 @@
 <!DOCTYPE html>
-<html>
+<html lang="hi">
 <head>
-    <title>WebRTC Auto-Morya</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Morya Video Conferencing</title>
+    <style>
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background: #111; color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden; /* Prevent scrolling */
+        }
+
+        /* Sabse Upar Header */
+        #topBar {
+            position: absolute; top: 0; left: 0; width: 100%; height: 40px;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 15px; box-sizing: border-box; z-index: 10;
+            border-bottom: 1px solid #333; font-size: 14px;
+        }
+        #serverStatus { color: #aaa; font-size: 12px; }
+        #serverStatus.connected { color: #00ff00; }
+
+        /* Main Video Container (Remote Video) */
+        #mainContainer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+            background: #1a1a1a;
+        }
+        
+        #remoteVideo {
+            width: 100%; height: 100%; object-fit: cover; /* WhatsApp jaisa pure fill */
+            background: #111;
+        }
+
+        /* Initial/Waiting Placeholder */
+        #placeholder {
+            position: absolute; font-size: 18px; color: #555;
+            text-align: center;
+        }
+
+        /* Chhota Local Video Frame (Movable) */
+        #localFrame {
+            position: absolute; bottom: 80px; right: 20px;
+            width: 120px; height: 160px; /* Portrait ratio like mobile */
+            border-radius: 12px; border: 2px solid white;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            overflow: hidden; cursor: grab; z-index: 20;
+            background: #222; transition: opacity 0.3s;
+        }
+        #localVideo {
+            width: 100%; height: 100%; object-fit: cover;
+        }
+
+        /* Niche Bottom Controls */
+        #bottomControls {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 70px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+            z-index: 10; padding-bottom: 10px;
+        }
+        #callState { font-weight: bold; font-size: 16px; margin-bottom: 5px; color: #ccc; }
+        
+        #callBtn {
+            padding: 12px 24px; font-size: 15px; cursor:pointer;
+            background: #28a745; color:white; border:none; border-radius: 25px;
+            display:none; box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            transition: background 0.2s;
+        }
+        #callBtn:hover { background: #218838; }
+
+        /* Log (Debugging) - Optional Chhota kar diya */
+        #log {
+            position: absolute; bottom: 80px; left: 10px;
+            font-size: 9px; color: yellow; width: 200px; height: 60px;
+            overflow-y: auto; text-align: left; opacity: 0.6; pointer-events: none;
+        }
+    </style>
 </head>
-<body style="background:black;color:white;text-align:center;font-family:sans-serif;">
+<body onclick="unlockAudio()">
 
-    <h2 id="title">Morya Video Connect</h2>
-    
-    <div style="display: flex; justify-content: center; gap: 10px;">
-        <video id="remoteVideo" autoplay playsinline style="width:48%; border:2px solid #333; background:#111; border-radius:10px;"></video>
-        <video id="localVideo" autoplay playsinline muted style="width:48%; border:2px solid #333; background:#111; border-radius:10px;"></video>
+    <div id="topBar">
+        <div>Video Conferencing</div>
+        <div id="serverStatus">Connecting server...</div>
     </div>
-    
-    <br>
-    <div id="status" style="font-weight:bold; color:#00ff00; margin-bottom:10px;">Initializing...</div>
-    
-    <button id="callBtn" onclick="initiateCall()" style="padding:15px 30px; font-size:16px; cursor:pointer; background: #28a745; color:white; border:none; border-radius:5px; display:none;">
-        📞 START CALL
-    </button>
 
-    <div id="log" style="font-size:10px; color:yellow; margin-top:15px; height:80px; overflow-y:auto; text-align:left; padding:10px; border-top:1px solid #333;"></div>
+    <div id="mainContainer">
+        <video id="remoteVideo" autoplay playsinline></video>
+        <div id="placeholder">
+            <div>📞</div>
+            <div style="font-size:14px; margin-top:5px;">Waiting for connection</div>
+        </div>
+    </div>
+
+    <div id="localFrame">
+        <video id="localVideo" autoplay playsinline muted></video>
+    </div>
+
+    <div id="log"></div>
+
+    <div id="bottomControls">
+        <div id="callState">Please wait...</div>
+        <button id="callBtn" onclick="initiateCall()">📞 START CALL</button>
+    </div>
 
 <script>
 let ws;
 let pc;
 let localStream;
 let remoteStream;
-let isSocketConnected = false;
 
 const config = {
     iceServers: [
@@ -39,57 +122,79 @@ const config = {
     ]
 };
 
+// UI Elements
+const statusSrv = document.getElementById("serverStatus");
+const stateCall = document.getElementById("callState");
+const btnCall = document.getElementById("callBtn");
+const remoteVid = document.getElementById("remoteVideo");
+const localVid = document.getElementById("localVideo");
+const placeholder = document.getElementById("placeholder");
+const logBox = document.getElementById("log");
+
 function log(msg) {
-    const l = document.getElementById("log");
-    l.innerHTML += `> ${msg}<br>`;
-    l.scrollTop = l.scrollHeight;
+    console.log(msg);
+    logBox.innerHTML += `> ${msg}<br>`;
+    logBox.scrollTop = logBox.scrollHeight;
 }
 
-// --- 1. WEBSOCKET & RECONNECT LOGIC ---
+// Update Call State Text
+function setState(text, color="#ccc") {
+    stateCall.innerText = text;
+    stateCall.style.color = color;
+}
+
+// --- 1. WEBSOCKET & AUTO-CONNECT ---
 function connectServer() {
+    log("Connecting WebSocket...");
     ws = new WebSocket("wss://webrtc-server-1-m4s8.onrender.com");
     
     ws.onopen = () => {
-        isSocketConnected = true;
-        document.getElementById("status").innerText = "Server Connected. Ready.";
-        document.getElementById("callBtn").style.display = "inline-block";
-        ws.send(JSON.stringify({ type: "join", room: "room1" }));
         log("WebSocket Connected");
+        statusSrv.innerText = "Connected to Server";
+        statusSrv.classList.add("connected");
+        ws.send(JSON.stringify({ type: "join", room: "room1" }));
+        autoLoadLocalVideo(); // WebSocket connect hote hi khud ka video load karein
     };
 
     ws.onmessage = async (msg) => {
         const data = JSON.parse(msg.data);
-        log("Received: " + data.type);
+        log("Got: " + data.type);
 
         if (data.type === "offer") {
             await handleOffer(data.data);
         } else if (data.type === "answer") {
             await pc.setRemoteDescription(new RTCSessionDescription(data.data));
+            setState("Connected", "#00ff00");
         } else if (data.type === "candidate") {
             try { await pc.addIceCandidate(new RTCIceCandidate(data.data)); } catch(e){}
         } else if (data.type === "stop") {
-            log("Stop signal received. Resetting...");
+            log("Peer disconnected");
             resetConnection();
         }
     };
 
     ws.onclose = () => {
-        isSocketConnected = false;
-        document.getElementById("status").innerText = "Reconnecting to server...";
-        setTimeout(connectServer, 3000); // Auto reconnect websocket
+        log("WebSocket Closed");
+        statusSrv.innerText = "Reconnecting server...";
+        statusSrv.classList.remove("connected");
+        resetConnection();
+        setTimeout(connectServer, 3000); 
     };
 }
 
-// --- 2. WEBRTC CORE ---
-async function setupMedia() {
+// --- 2. MEDIA SETUP ---
+async function autoLoadLocalVideo() {
     if (localStream) return;
+    setState("Initializing Camera...");
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ 
-            video: true, 
-            audio: { echoCancellation: true, noiseSuppression: true } 
+            video: true, audio: { echoCancellation: true } 
         });
-        document.getElementById("localVideo").srcObject = localStream;
+        localVid.srcObject = localStream;
+        setState("Ready");
+        btnCall.style.display = "inline-block"; // Ab call karne ke liye ready
     } catch (e) {
+        setState("Camera Error", "red");
         log("Media Error: " + e);
     }
 }
@@ -103,64 +208,138 @@ async function createPC() {
     };
 
     pc.ontrack = (event) => {
-        log("Remote track added");
+        log("Remote track received");
         if (!remoteStream) remoteStream = new MediaStream();
         remoteStream.addTrack(event.track);
-        const rv = document.getElementById("remoteVideo");
-        rv.srcObject = remoteStream;
-        rv.muted = false; // Auto unmute
-        rv.play().catch(() => log("Auto-play blocked, wait for interaction"));
+        remoteVid.srcObject = remoteStream;
+        
+        // UI Update on Connect
+        placeholder.style.display = "none";
+        setState("Connected", "#00ff00");
     };
 
     pc.onconnectionstatechange = () => {
         if (pc.connectionState === "disconnected" || pc.connectionState === "failed") {
-            log("Connection lost. Retrying...");
+            log("P2P connection lost");
             resetConnection();
         }
     };
 
-    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+    if(localStream) {
+        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+    }
 }
 
 // --- 3. ACTIONS ---
 async function initiateCall() {
-    await setupMedia();
-    await createPC();
+    if(!localStream) await autoLoadLocalVideo();
+    setState("Calling...", "cyan");
+    btnCall.style.display = "none";
     
+    await createPC();
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     ws.send(JSON.stringify({ type: "offer", data: offer }));
-    document.getElementById("status").innerText = "Calling...";
 }
 
 async function handleOffer(offerData) {
-    await setupMedia();
+    setState("Incoming Call...", "cyan");
+    btnCall.style.display = "none";
+    
+    await autoLoadLocalVideo();
     await createPC();
     await pc.setRemoteDescription(new RTCSessionDescription(offerData));
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
     ws.send(JSON.stringify({ type: "answer", data: answer }));
-    document.getElementById("status").innerText = "Connected";
 }
 
 function resetConnection() {
-    if (pc) {
-        pc.close();
-        pc = null;
-    }
+    if (pc) { pc.close(); pc = null; }
     remoteStream = null;
-    document.getElementById("remoteVideo").srcObject = null;
-    document.getElementById("status").innerText = "Connection Reset. Ready again.";
+    remoteVid.srcObject = null;
+    placeholder.style.display = "flex";
+    
+    if(ws && ws.readyState === WebSocket.OPEN) {
+        setState("Ready");
+        btnCall.style.display = "inline-block";
+    } else {
+        setState("Please wait...");
+        btnCall.style.display = "none";
+    }
+}
+
+// Browser audio policy workaround
+function unlockAudio() {
+    if(remoteVid.srcObject) remoteVid.play().catch(()=>{});
 }
 
 // Start everything
 window.onload = connectServer;
 
-// Global interaction listener to bypass audio block
-document.body.addEventListener('click', () => {
-    const rv = document.getElementById("remoteVideo");
-    if(rv.srcObject) rv.play();
-}, { once: false });
+// --- 4. MOVABLE LOCAL FRAME LOGIC (Drag & Drop) ---
+const dragFrame = document.getElementById("localFrame");
+let active = false;
+let currentX; let currentY;
+let initialX; let initialY;
+let xOffset = 0; let yOffset = 0;
+
+// Mouse events
+dragFrame.addEventListener("mousedown", dragStart, false);
+document.addEventListener("mousemove", drag, false);
+document.addEventListener("mouseup", dragEnd, false);
+
+// Touch events (for mobile)
+dragFrame.addEventListener("touchstart", dragStart, false);
+document.addEventListener("touchmove", drag, false);
+document.addEventListener("touchend", dragEnd, false);
+
+function dragStart(e) {
+    if (e.type === "touchstart") {
+        initialX = e.touches[0].clientX - xOffset;
+        initialY = e.touches[0].clientY - yOffset;
+    } else {
+        initialX = e.clientX - xOffset;
+        initialY = e.clientY - yOffset;
+    }
+    if (e.target === dragFrame || dragFrame.contains(e.target)) {
+        active = true;
+        dragFrame.style.cursor = "grabbing";
+    }
+}
+
+function drag(e) {
+    if (active) {
+        e.preventDefault();
+        if (e.type === "touchmove") {
+            currentX = e.touches[0].clientX - initialX;
+            currentY = e.touches[0].clientY - initialY;
+        } else {
+            currentX = e.clientX - initialX;
+            currentY = e.clientY - initialY;
+        }
+        xOffset = currentX;
+        yOffset = currentY;
+        setTranslate(currentX, currentY, dragFrame);
+    }
+}
+
+function setTranslate(xPos, yPos, el) {
+    // Boundary checks (Keep inside window)
+    const rect = el.getBoundingClientRect();
+    const winW = window.innerWidth;
+    const winH = window.innerHeight;
+
+    // Is logic ko simple rakhte hain taaki drag smoother rahe
+    el.style.transform = `translate3d(${xPos}px, ${yPos}px, 0)`;
+}
+
+function dragEnd(e) {
+    initialX = currentX;
+    initialY = currentY;
+    active = false;
+    dragFrame.style.cursor = "grab";
+}
 
 </script>
 </body>
