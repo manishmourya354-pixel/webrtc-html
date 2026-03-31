@@ -1,346 +1,167 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>WebRTC Test</title>
+    <title>WebRTC Auto-Morya</title>
 </head>
-<body style="background:black;color:white;text-align:center;">
+<body style="background:black;color:white;text-align:center;font-family:sans-serif;">
 
-<h2>WebRTC Test</h2>
-<video id="remoteVideo" autoplay playsinline style="width:45%"></video>
-<video id="localVideo" autoplay playsinline muted style="width:45%"></video>
-<br><br>
-<button onclick="start()">START</button>
-<button onclick="callPC()">CALL PC</button>
-<p id="status">Waiting for join</p>
-<div id="log" style="font-size:12px;color:yellow;"></div>
+    <h2 id="title">Morya Video Connect</h2>
+    
+    <div style="display: flex; justify-content: center; gap: 10px;">
+        <video id="remoteVideo" autoplay playsinline style="width:48%; border:2px solid #333; background:#111; border-radius:10px;"></video>
+        <video id="localVideo" autoplay playsinline muted style="width:48%; border:2px solid #333; background:#111; border-radius:10px;"></video>
+    </div>
+    
+    <br>
+    <div id="status" style="font-weight:bold; color:#00ff00; margin-bottom:10px;">Initializing...</div>
+    
+    <button id="callBtn" onclick="initiateCall()" style="padding:15px 30px; font-size:16px; cursor:pointer; background: #28a745; color:white; border:none; border-radius:5px; display:none;">
+        📞 START CALL
+    </button>
 
-<button onclick="unlockAudio()">UNLOCK AUDIO</button>
+    <div id="log" style="font-size:10px; color:yellow; margin-top:15px; height:80px; overflow-y:auto; text-align:left; padding:10px; border-top:1px solid #333;"></div>
 
 <script>
 let ws;
 let pc;
-let pingInterval = null;
-let remoteStream = null;
-let reconnectTimeout = null;
-let reconnectAttempts = 0;
+let localStream;
+let remoteStream;
+let isSocketConnected = false;
+
+const config = {
+    iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        {
+            urls: "turn:openrelay.metered.ca:80",
+            username: "openrelayproject",
+            credential: "openrelayproject"
+        }
+    ]
+};
+
 function log(msg) {
-    console.log(msg);
-    document.getElementById("log").innerHTML += msg + "<br>";
-}
-// 🔁 RECONNECT LOGIC
-function reconnect() {
-    if (reconnectTimeout) return;
-
-    reconnectAttempts++;
-    console.log("Reconnecting attempt:", reconnectAttempts);
-
-    reconnectTimeout = setTimeout(() => {
-        reconnectTimeout = null;
-        start();
-    }, Math.min(5000, reconnectAttempts * 1000));
+    const l = document.getElementById("log");
+    l.innerHTML += `> ${msg}<br>`;
+    l.scrollTop = l.scrollHeight;
 }
 
-function start() {
-    reconnectAttempts = 0;
+// --- 1. WEBSOCKET & RECONNECT LOGIC ---
+function connectServer() {
+    ws = new WebSocket("wss://webrtc-server-1-m4s8.onrender.com");
+    
+    ws.onopen = () => {
+        isSocketConnected = true;
+        document.getElementById("status").innerText = "Server Connected. Ready.";
+        document.getElementById("callBtn").style.display = "inline-block";
+        ws.send(JSON.stringify({ type: "join", room: "room1" }));
+        log("WebSocket Connected");
+    };
 
-    if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout);
-        reconnectTimeout = null;
-    }
-    if (pingInterval) {
-        clearInterval(pingInterval);
-        pingInterval = null;
-    }
+    ws.onmessage = async (msg) => {
+        const data = JSON.parse(msg.data);
+        log("Received: " + data.type);
 
-     if (ws) {
-        ws.close();
-        ws = null;
+        if (data.type === "offer") {
+            await handleOffer(data.data);
+        } else if (data.type === "answer") {
+            await pc.setRemoteDescription(new RTCSessionDescription(data.data));
+        } else if (data.type === "candidate") {
+            try { await pc.addIceCandidate(new RTCIceCandidate(data.data)); } catch(e){}
+        } else if (data.type === "stop") {
+            log("Stop signal received. Resetting...");
+            resetConnection();
+        }
+    };
+
+    ws.onclose = () => {
+        isSocketConnected = false;
+        document.getElementById("status").innerText = "Reconnecting to server...";
+        setTimeout(connectServer, 3000); // Auto reconnect websocket
+    };
+}
+
+// --- 2. WEBRTC CORE ---
+async function setupMedia() {
+    if (localStream) return;
+    try {
+        localStream = await navigator.mediaDevices.getUserMedia({ 
+            video: true, 
+            audio: { echoCancellation: true, noiseSuppression: true } 
+        });
+        document.getElementById("localVideo").srcObject = localStream;
+    } catch (e) {
+        log("Media Error: " + e);
     }
+}
+
+async function createPC() {
+    if (pc) pc.close();
+    pc = new RTCPeerConnection(config);
+
+    pc.onicecandidate = (event) => {
+        if (event.candidate) ws.send(JSON.stringify({ type: "candidate", data: event.candidate }));
+    };
+
+    pc.ontrack = (event) => {
+        log("Remote track added");
+        if (!remoteStream) remoteStream = new MediaStream();
+        remoteStream.addTrack(event.track);
+        const rv = document.getElementById("remoteVideo");
+        rv.srcObject = remoteStream;
+        rv.muted = false; // Auto unmute
+        rv.play().catch(() => log("Auto-play blocked, wait for interaction"));
+    };
+
+    pc.onconnectionstatechange = () => {
+        if (pc.connectionState === "disconnected" || pc.connectionState === "failed") {
+            log("Connection lost. Retrying...");
+            resetConnection();
+        }
+    };
+
+    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+}
+
+// --- 3. ACTIONS ---
+async function initiateCall() {
+    await setupMedia();
+    await createPC();
+    
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    ws.send(JSON.stringify({ type: "offer", data: offer }));
+    document.getElementById("status").innerText = "Calling...";
+}
+
+async function handleOffer(offerData) {
+    await setupMedia();
+    await createPC();
+    await pc.setRemoteDescription(new RTCSessionDescription(offerData));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    ws.send(JSON.stringify({ type: "answer", data: answer }));
+    document.getElementById("status").innerText = "Connected";
+}
+
+function resetConnection() {
     if (pc) {
         pc.close();
         pc = null;
     }
-    const status = document.getElementById("status");
-    const remoteVideo = document.getElementById("remoteVideo");
-    const localVideo = document.getElementById("localVideo");
-
-       // 🔊 AUDIO FIX
-    remoteVideo.muted = false;
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    audioContext.resume();
-
-    ws = new WebSocket("wss://webrtc-server-1-m4s8.onrender.com");
-    ws.onclose = () => {
-    console.log("WS CLOSED");
-    status.innerText = "Disconnected";
-    reconnect();
-    };
-
-    ws.onerror = (e) => {
-        console.log("WS ERROR", e);
-        reconnect();
-    };
-    // 🔵 ON OPEN
-    ws.onopen = async () => {
-        status.innerText = "WebSocket Connected";
-
-        ws.send(JSON.stringify({
-            type: "join",
-            room: "room1"
-        }));
-        ws.send(JSON.stringify({
-             type: "ready"
-        }));
-        pc = new RTCPeerConnection({
-            iceServers: [
-                        { urls: "stun:stun.l.google.com:19302" },
-                        {
-                            urls: "turn:openrelay.metered.ca:80",
-                            username: "openrelayproject",
-                            credential: "openrelayproject"
-                        }
-                    ]
-        });
-
-        pc.addTransceiver("video", { direction: "sendrecv" });
-        pc.addTransceiver("audio", { direction: "sendrecv" });
-        pc.ontrack = (event) => {
-           log("TRACK: " + event.track.kind); 
-           
-            if (!remoteStream) {
-                remoteStream = new MediaStream();
-            }
-           
-            remoteStream.addTrack(event.track);        
-            remoteVideo.srcObject = remoteStream;  
-            remoteVideo.play().catch(() => {});
-     
-            // 🔊 ensure audio plays
-            if (event.track.kind === "audio") {
-                  log("🔊 AUDIO TRACK RECEIVED");
-
-                remoteVideo.muted = false;
-
-                setTimeout(() => {
-                    remoteVideo.play()
-                     .then(() => log("✅ AUDIO PLAYING"))
-                     .catch(e => log("❌ PLAY BLOCKED: " + e)); 
-                }, 100);
-            }              
-            status.innerText = "Streaming...";
-        };
-        pc.onconnectionstatechange = () => {
-            console.log("PC State:", pc.connectionState);
-            if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
-                reconnect();
-            }
-        };
-
-        pc.onicecandidate = (event) => {
-            if (event.candidate) {
-                ws.send(JSON.stringify({
-                    type: "candidate",
-                    data: {
-                        candidate: event.candidate.candidate,
-                        sdpMid: event.candidate.sdpMid,
-                        sdpMLineIndex: event.candidate.sdpMLineIndex
-                    }
-                }));
-            }
-        };
-        pc.onnegotiationneeded = async () => {
-            try {
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-                ws.send(JSON.stringify({
-                    type: "offer",
-                    data: pc.localDescription
-                }));
-            } catch (err) {
-                log("Negotiation Error: " + err);
-            }
-        };
-        let stream;
-        try {
-            stream = await navigator.mediaDevices.getUserMedia({
-                video: true,
-                audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true
-                }
-            });
-            log("📷 Local tracks: " + stream.getTracks().map(t => t.kind).join(","));
-        } catch (e) {
-            alert("Camera permission issue");
-            return;
-        }
-
-        localVideo.srcObject = stream;
-
-        stream.getTracks().forEach(track => {
-            pc.addTrack(track, stream);
-        });
-
-        // 🔥 VP8 FIX
-        const sender = pc.getSenders().find(s => s.track && s.track.kind === "video");
-        if (sender) {
-            const params = sender.getParameters();
-            if (params.codecs) {
-                params.codecs = params.codecs.filter(c => c.mimeType === "video/VP8");
-                sender.setParameters(params);
-            }
-        }
-
-        status.innerText = "Ready...";
-        
-        
-        pingInterval = setInterval(() => {
-            if (ws && ws.readyState === 1) {
-                    ws.send(JSON.stringify({ type: "ping" }));
-            }
-         }, 15000);
-    };
-
-   
-    // 🟢 ON MESSAGE
-    ws.onmessage = async (msg) => {
-        const data = JSON.parse(msg.data);
-
-        // 📞 Incoming call
-        if (data.type === "call_request") {
-            let accept = confirm("Incoming Call... Accept?");
-            if (accept) {
-                ws.send(JSON.stringify({ type: "call_accept" }));
-            } else {
-                ws.send(JSON.stringify({ type: "call_reject" }));
-            }
-        }
-
-        // ✅ Call accepted → START OFFER
-        else if (data.type === "call_accept") {
-
-            pc.getSenders().forEach(sender => {
-                if (sender.track) sender.track.enabled = true;
-            });
-            const offer = await pc.createOffer({
-                offerToReceiveVideo: true,
-                offerToReceiveAudio: true
-            });
-
-            await pc.setLocalDescription(offer);
-
-            ws.send(JSON.stringify({
-                type: "offer",
-                data: offer
-            }));
-           
-            status.innerText = "Calling...";
-        }
-        // 📥 OFFER RECEIVE
-        else if (data.type === "offer") {
-            await pc.setRemoteDescription(new RTCSessionDescription(data.data));
-
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-
-            ws.send(JSON.stringify({
-                type: "answer",
-                data: answer
-            }));
-
-            status.innerText = "Answer sent";
-        }
-        else if (data.type === "offer") {
-            await pc.setRemoteDescription(new RTCSessionDescription(data.data));
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            ws.send(JSON.stringify({
-                type: "answer",
-                data: pc.localDescription
-            }));
-        }
-        // 🎯 Answer
-        else if (data.type === "answer") {
-            await pc.setRemoteDescription(new RTCSessionDescription(data.data));
-            status.innerText = "Connected!";
-        }
-
-        // 🔁 ICE
-        else if (data.type === "candidate") {
-            try {
-                await pc.addIceCandidate(new RTCIceCandidate(data.data));
-            } catch {}
-        }
-
-        // 🛑 Stop
-        else if (data.type === "stop") {
-             console.log("STOP RECEIVED");
-             if (pingInterval) {
-                clearInterval(pingInterval);
-                pingInterval = null;
-            }
-          
-             if (pc) {
-                pc.close();
-                pc = null;
-            }      
-             if (ws) {
-                ws.onclose = null;
-                ws.close();
-                ws = null;
-             }                     
-           
-             if (remoteVideo.srcObject) {
-                remoteVideo.srcObject.getTracks().forEach(t => t.stop());
-                remoteVideo.srcObject = null;
-            }
-             if (localVideo.srcObject) {
-                localVideo.srcObject.getTracks().forEach(t => t.stop());
-                localVideo.srcObject = null;
-            }                    
-            status.innerText = "Reconnecting...";
-            reconnect();          
-        }
-    };
+    remoteStream = null;
+    document.getElementById("remoteVideo").srcObject = null;
+    document.getElementById("status").innerText = "Connection Reset. Ready again.";
 }
 
+// Start everything
+window.onload = connectServer;
 
-function unlockAudio() {
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    audioContext.resume();
-
-    const video = document.getElementById("remoteVideo");
-    video.muted = false;
-
-    video.play()
-        .then(() => log("🔓 Audio unlocked"))
-        .catch(e => log("❌ Unlock failed: " + e));
-}
-
-// 📞 CALL BUTTON
-function callPC() {
-    if (ws) {
-        ws.send(JSON.stringify({ type: "call_request" }));
-    }
-}
-window.onload = () => {
-    start();
-
-    document.body.addEventListener("click", async () => {
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        await audioContext.resume();
-
-        const video = document.getElementById("remoteVideo");
-        video.muted = false;
-        await video.play();
-
-        console.log("🔊 Audio forced play");
-    });
-};
+// Global interaction listener to bypass audio block
+document.body.addEventListener('click', () => {
+    const rv = document.getElementById("remoteVideo");
+    if(rv.srcObject) rv.play();
+}, { once: false });
 
 </script>
-   
-
 </body>
 </html>
