@@ -103,7 +103,7 @@ function start() {
                  remoteStream = new MediaStream(); 
             }
             remoteStream.addTrack(event.track);        
-            remoteVideo.srcObject = remoteStreams;  
+            remoteVideo.srcObject = remoteStream;  
             remoteVideo.play().catch(() => {});
      
             // 🔊 ensure audio plays
