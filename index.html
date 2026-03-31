@@ -3,103 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Morya Pro 4K Connect</title>
+    <title>Morya Pro 4K - Fixed</title>
     <style>
-        :root {
-            --morya-green: #00ff7f;
-            --bg-dark: #050505;
-        }
-        body, html {
-            margin: 0; padding: 0; width: 100%; height: 100%;
-            background: var(--bg-dark); color: white;
-            font-family: 'Segoe UI', sans-serif; overflow: hidden;
-        }
-
-        /* Top Bar */
-        #topBar {
-            position: absolute; top: 0; width: 100%; height: 45px;
-            background: rgba(0,0,0,0.8); display: flex; 
-            justify-content: space-between; align-items: center;
-            padding: 0 20px; box-sizing: border-box; z-index: 100;
-            border-bottom: 1.5px solid #1a1a1a;
-        }
-
-        /* Main Video (Big Frame) with Border */
-        #mainContainer {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            display: flex; justify-content: center; align-items: center;
-            border: 8px solid #111; /* Clean Border instead of glow */
-            box-sizing: border-box;
-        }
+        :root { --morya-green: #00ff7f; --bg-dark: #050505; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: var(--bg-dark); color: white; font-family: sans-serif; overflow: hidden; }
+        
+        #topBar { position: absolute; top: 0; width: 100%; height: 45px; background: rgba(0,0,0,0.8); display: flex; justify-content: space-between; align-items: center; padding: 0 20px; box-sizing: border-box; z-index: 100; border-bottom: 1.5px solid #1a1a1a; }
+        #mainContainer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; border: 8px solid #111; box-sizing: border-box; }
         #remoteVideo { width: 100%; height: 100%; object-fit: cover; background: #000; }
-
-        /* Draggable Small Video Frame */
-        #localFrame {
-            position: absolute; bottom: 110px; right: 30px;
-            width: 220px; height: 300px; /* Big Size */
-            border-radius: 12px; border: 2.5px solid var(--morya-green);
-            overflow: hidden; cursor: grab; z-index: 1000;
-            background: #000; box-shadow: 0 10px 30px rgba(0,0,0,0.8);
-            touch-action: none;
-        }
+        
+        #localFrame { position: absolute; bottom: 110px; right: 30px; width: 220px; height: 300px; border-radius: 12px; border: 2.5px solid var(--morya-green); overflow: hidden; cursor: grab; z-index: 1000; background: #000; touch-action: none; }
         #localVideo { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
 
-        /* Mobile-style Incoming Call Overlay */
-        #incomingOverlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9); z-index: 2000;
-            display: none; flex-direction: column; align-items: center; justify-content: center;
-        }
-        .caller-id { font-size: 28px; margin-bottom: 50px; color: var(--morya-green); }
-        .slide-container { width: 300px; height: 80px; background: #222; border-radius: 40px; position: relative; display: flex; align-items: center; }
-        .slider { 
-            width: 70px; height: 70px; background: #28a745; border-radius: 50%; 
-            position: absolute; left: 5px; cursor: pointer; 
-            display: flex; align-items: center; justify-content: center; font-size: 24px;
-        }
-        .slide-text { width: 100%; text-align: center; color: #888; font-size: 14px; pointer-events: none; }
-
-        /* Controls */
-        #controls {
-            position: absolute; bottom: 30px; width: 100%;
-            display: flex; justify-content: center; align-items: center;
-            gap: 15px; z-index: 500;
-        }
-        .btn {
-            padding: 14px 28px; border-radius: 50px; border: none;
-            cursor: pointer; font-weight: bold; transition: 0.3s;
-            display: flex; align-items: center; gap: 8px;
-        }
-        #callBtn { background: var(--morya-green); color: black; margin-right: 40px; }
+        /* Status & UI */
+        #statusIndicator { font-size: 11px; color: #ffbc00; } 
+        #controls { position: absolute; bottom: 30px; width: 100%; display: flex; justify-content: center; align-items: center; gap: 15px; z-index: 500; }
+        .btn { padding: 14px 28px; border-radius: 50px; border: none; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        #callBtn { background: var(--morya-green); color: black; }
         #endBtn { background: #ff4444; color: white; display: none; }
-        #muteBtn { background: #333; color: white; display: none; }
-
-        #errorBox { color: #ff4444; font-size: 12px; margin-left: 10px; display: none; }
-        #placeholder { position: absolute; color: #333; font-size: 14px; letter-spacing: 2px; }
+        
+        /* Incoming UI */
+        #incomingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 2000; display: none; flex-direction: column; align-items: center; justify-content: center; }
     </style>
 </head>
 <body>
 
     <div id="topBar">
-        <div style="display: flex; align-items: center;">
-            <strong style="color: var(--morya-green);">MORYA 4K</strong>
-            <span id="errorBox">⚠️ Stream Error</span>
-        </div>
-        <div id="serverStatus" style="font-size: 11px; color: #555;">Connecting...</div>
-    </div>
-
-    <div id="incomingOverlay">
-        <div class="caller-id">Incoming Morya Call...</div>
-        <div class="slide-container">
-            <div id="acceptSlider" class="slider">📞</div>
-            <div class="slide-text">SLIDE TO ANSWER</div>
-        </div>
-        <button onclick="rejectCall()" style="margin-top: 40px; background:none; border:1px solid #ff4444; color:#ff4444; padding:10px 30px; border-radius:20px; cursor:pointer;">REJECT</button>
+        <strong style="color: var(--morya-green);">MORYA 4K SYSTEM</strong>
+        <div id="statusIndicator">SERVER: WAKING UP...</div>
     </div>
 
     <div id="mainContainer">
         <video id="remoteVideo" autoplay playsinline></video>
-        <div id="placeholder">WAITING FOR PEER...</div>
     </div>
 
     <div id="localFrame">
@@ -108,172 +43,133 @@
 
     <div id="controls">
         <button id="callBtn" class="btn" onclick="initiateCall()">📞 START CALL</button>
-        <button id="muteBtn" class="btn" onclick="toggleMute()">🎤 MUTE</button>
         <button id="endBtn" class="btn" onclick="endCall()">🛑 END</button>
     </div>
 
+    <div id="incomingOverlay">
+        <h2 style="color:var(--morya-green)">INCOMING CALL...</h2>
+        <button onclick="acceptCall()" style="background:var(--morya-green); padding:20px 40px; border-radius:50px; border:none; font-weight:bold; cursor:pointer;">ANSWER</button>
+        <button onclick="rejectCall()" style="margin-top:20px; background:none; border:1px solid red; color:red; cursor:pointer;">REJECT</button>
+    </div>
+
 <script>
-let ws, pc, localStream, remoteStream;
+let ws, pc, localStream;
 let pendingOffer = null;
 
-// Draggable Logic
-const dragItem = document.getElementById("localFrame");
-let active = false;
-let currentX, currentY, initialX, initialY, xOffset = 0, yOffset = 0;
+const config = {
+    iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" }
+    ]
+};
 
-dragItem.addEventListener("mousedown", dragStart);
-document.addEventListener("mousemove", drag);
-document.addEventListener("mouseup", dragEnd);
-
-function dragStart(e) {
-    initialX = e.clientX - xOffset;
-    initialY = e.clientY - yOffset;
-    if (e.target === dragItem) active = true;
-}
-function drag(e) {
-    if (active) {
-        e.preventDefault();
-        currentX = e.clientX - initialX;
-        currentY = e.clientY - initialY;
-        xOffset = currentX;
-        yOffset = currentY;
-        dragItem.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
-    }
-}
-function dragEnd() { active = false; }
-
-// Swap logic only on small frame click
-dragItem.addEventListener('dblclick', () => {
-    const main = document.getElementById("remoteVideo");
-    const small = document.getElementById("localVideo");
-    const temp = main.srcObject;
-    main.srcObject = small.srcObject;
-    small.srcObject = temp;
-});
-
-// --- 1. 4K VIDEO QUALITY & REFRESH FIX ---
-async function getMedia() {
-    // Clear old streams if any
-    if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
-    }
-
-    try {
-        localStream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                width: { ideal: 3840 }, // 4K Ideal
-                height: { ideal: 2160 },
-                frameRate: { ideal: 30 }
-            },
-            audio: { echoCancellation: true, noiseSuppression: true }
-        });
-        document.getElementById("localVideo").srcObject = localStream;
-        document.getElementById("errorBox").style.display = "none";
-    } catch (e) {
-        document.getElementById("errorBox").style.display = "inline";
-        console.error(e);
-    }
-}
-
-// --- 2. WEBSOCKET & SIGNALING ---
+// 1. WebSocket Fix (Waking up Render)
 function connect() {
+    const status = document.getElementById("statusIndicator");
+    status.innerText = "SERVER: CONNECTING...";
+    
     ws = new WebSocket("wss://webrtc-server-1-m4s8.onrender.com");
+
     ws.onopen = () => {
-        document.getElementById("serverStatus").innerText = "● SERVER ONLINE";
-        document.getElementById("serverStatus").style.color = var(--morya-green);
+        status.innerText = "SERVER: ONLINE";
+        status.style.color = "#00ff7f";
         ws.send(JSON.stringify({ type: "join", room: "room1" }));
-        getMedia();
+        getMedia(); 
     };
+
     ws.onmessage = async (msg) => {
         const d = JSON.parse(msg.data);
         if (d.type === "offer") {
             pendingOffer = d.data;
             document.getElementById("incomingOverlay").style.display = "flex";
         } 
-        else if (d.type === "answer") await pc.setRemoteDescription(new RTCSessionDescription(d.data));
-        else if (d.type === "candidate") pc && pc.addIceCandidate(new RTCIceCandidate(d.data));
-        else if (d.type === "stop") endCall(false);
+        else if (d.type === "answer") {
+            await pc.setRemoteDescription(new RTCSessionDescription(d.data));
+            status.innerText = "STATUS: CONNECTED";
+        }
+        else if (d.type === "candidate") {
+            if (pc) pc.addIceCandidate(new RTCIceCandidate(d.data)).catch(e => {});
+        }
+        else if (d.type === "stop") resetUI();
     };
-    ws.onclose = () => setTimeout(connect, 3000);
+
+    ws.onclose = () => {
+        status.innerText = "SERVER: OFFLINE (RETRYING...)";
+        status.style.color = "red";
+        setTimeout(connect, 3000); // Auto-retry
+    };
+
+    ws.onerror = () => { status.innerText = "SERVER: ERROR"; };
 }
 
-// --- 3. CALL ACTIONS ---
+// 2. Media Fix (Camera Reset)
+async function getMedia() {
+    try {
+        if (localStream) localStream.getTracks().forEach(t => t.stop());
+        localStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: 1280, height: 720 }, // 4K ki jagah pehle HD test karein
+            audio: true
+        });
+        document.getElementById("localVideo").srcObject = localStream;
+    } catch (e) {
+        alert("Camera Permission Required!");
+    }
+}
+
+// 3. WebRTC Peer Connection
+async function createPeer() {
+    pc = new RTCPeerConnection(config);
+    
+    pc.onicecandidate = e => {
+        if (e.candidate) ws.send(JSON.stringify({ type: "candidate", data: e.candidate }));
+    };
+
+    pc.ontrack = e => {
+        document.getElementById("remoteVideo").srcObject = e.streams[0];
+        document.getElementById("statusIndicator").innerText = "STATUS: STREAMING";
+    };
+
+    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+}
+
 async function initiateCall() {
-    btnCall.style.display = "none";
-    showControls(true);
     await createPeer();
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     ws.send(JSON.stringify({ type: "offer", data: offer }));
+    
+    document.getElementById("callBtn").style.display = "none";
+    document.getElementById("endBtn").style.display = "block";
+    document.getElementById("statusIndicator").innerText = "STATUS: CALLING...";
 }
 
 async function acceptCall() {
     document.getElementById("incomingOverlay").style.display = "none";
-    btnCall.style.display = "none";
-    showControls(true);
     await createPeer();
     await pc.setRemoteDescription(new RTCSessionDescription(pendingOffer));
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
     ws.send(JSON.stringify({ type: "answer", data: answer }));
+    
+    document.getElementById("callBtn").style.display = "none";
+    document.getElementById("endBtn").style.display = "block";
 }
 
-function rejectCall() {
-    document.getElementById("incomingOverlay").style.display = "none";
-    ws.send(JSON.stringify({ type: "stop" }));
-}
-
-async function createPeer() {
+function resetUI() {
     if (pc) pc.close();
-    pc = new RTCPeerConnection(config);
-    pc.onicecandidate = e => e.candidate && ws.send(JSON.stringify({ type: "candidate", data: e.candidate }));
-    pc.ontrack = e => {
-        document.getElementById("remoteVideo").srcObject = e.streams[0];
-        document.getElementById("placeholder").style.display = "none";
-    };
-    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-}
-
-function endCall(sendStop = true) {
-    if (sendStop) ws.send(JSON.stringify({ type: "stop" }));
-    if (pc) { pc.close(); pc = null; }
     document.getElementById("remoteVideo").srcObject = null;
-    document.getElementById("placeholder").style.display = "block";
-    showControls(false);
-    btnCall.style.display = "inline-block";
-    getMedia(); // Re-fetch media to prevent blank screen
+    document.getElementById("callBtn").style.display = "block";
+    document.getElementById("endBtn").style.display = "none";
+    document.getElementById("incomingOverlay").style.display = "none";
+    document.getElementById("statusIndicator").innerText = "SERVER: ONLINE";
 }
 
-// --- 4. SLIDER LOGIC ---
-const slider = document.getElementById("acceptSlider");
-slider.onmousedown = (e) => {
-    let startX = e.clientX;
-    document.onmousemove = (ev) => {
-        let moveX = ev.clientX - startX;
-        if (moveX > 0 && moveX < 225) slider.style.left = moveX + "px";
-        if (moveX >= 220) {
-            document.onmousemove = null;
-            acceptCall();
-        }
-    };
-    document.onmouseup = () => {
-        document.onmousemove = null;
-        if (parseInt(slider.style.left) < 220) slider.style.left = "5px";
-    };
-};
-
-function showControls(active) {
-    const d = active ? "flex" : "none";
-    document.getElementById("endBtn").style.display = d;
-    document.getElementById("muteBtn").style.display = d;
+function endCall() {
+    ws.send(JSON.stringify({ type: "stop" }));
+    resetUI();
 }
 
-function toggleMute() {
-    const enabled = localStream.getAudioTracks()[0].enabled;
-    localStream.getAudioTracks()[0].enabled = !enabled;
-    document.getElementById("muteBtn").innerText = !enabled ? "🎤 MUTE" : "🔇 UNMUTE";
-}
-
+// Start
 window.onload = connect;
 </script>
 </body>
