@@ -139,8 +139,12 @@
 
     <div id="topBar">
         <strong style="color: var(--morya-green); font-size: 18px;">Dr MORYA Brand of Health</strong>
-        <div id="statusIndicator">SERVER: WAKING UP...</div>
-    </div>
+        <div style="display: flex; align-items: center; gap: 10px;"> <div id="statusIndicator">SERVER: WAKING UP...</div>
+            <div id="chatIconContainer" onclick="toggleChat()" style="display:none; cursor:pointer; position:relative;">
+                <span style="font-size:20px;">💬</span>
+                <div id="chatBadge" style="position:absolute; top:-5px; right:-5px; background:red; color:white; border-radius:50%; width:15px; height:15px; font-size:10px; display:none; align-items:center; justify-content:center;">0</div>
+            </div>
+        </div> </div>
 
     <div id="mainContainer">
         <video id="remoteVideo" autoplay playsinline></video>
@@ -183,9 +187,25 @@
 
 <script>
 let ws, pc, localStream,dataChannel;
+let callTimeout = null;
 let pendingOffer = null;
 let isMuted = false;
 let isVideoPaused = false;
+let isChatVisible = false;
+let unreadCount = 0;
+
+function toggleChat() {
+    const chat = document.getElementById("chatContainer");
+    isChatVisible = !isChatVisible;
+    chat.style.display = isChatVisible ? "flex" : "none";
+    
+    if (isChatVisible) {
+        unreadCount = 0;
+        document.getElementById("chatBadge").style.display = "none";
+    }
+}
+
+
 
 // STUN settings (Original file se unchanged)
 const config = {
@@ -261,6 +281,12 @@ function addMessageToUI(msg, type) {
     div.innerText = msg;
     box.appendChild(div);
     box.scrollTop = box.scrollHeight;
+    if (type === 'received' && !isChatVisible) {
+        unreadCount++;
+        const badge = document.getElementById("chatBadge");
+        badge.innerText = unreadCount;
+        badge.style.display = "flex"; // Badge dikhao
+    }
 }
 
 // Chat Setup Function (Ise createPeer ke andar dalna hoga)
@@ -366,9 +392,17 @@ async function initiateCall() {
     
     updateUIVorCall(true);
     document.getElementById("statusIndicator").innerText = "STATUS: CALLING...";
+    callTimeout = setTimeout(() => {
+        if (pc && pc.iceConnectionState !== "connected" && pc.iceConnectionState !== "completed") {
+            document.getElementById("statusIndicator").innerText = "STATUS: NOT ANSWERED";
+            document.getElementById("statusIndicator").style.color = "#ef4444";
+            setTimeout(endCall, 3000); // 3 sec baad auto reset
+        }
+    }, 50000); // 50 seconds timer
 }
 
 async function acceptCall() {
+    if (callTimeout) clearTimeout(callTimeout);
     document.getElementById("incomingOverlay").style.display = "none";
     await createPeer();
     await pc.setRemoteDescription(new RTCSessionDescription(pendingOffer));
@@ -416,37 +450,56 @@ function endCall() {
 function updateUIVorCall(inCall) {
     document.getElementById("callBtn").style.display = inCall ? "none" : "block";
     document.getElementById("activeControls").style.display = inCall ? "flex" : "none";
-    document.getElementById("chatContainer").style.display = inCall ? "flex" : "none";
+    const chatIcon = document.getElementById("chatIconContainer");
+    if(chatIcon) chatIcon.style.display = inCall ? "flex" : "none";
 }
 
 function resetUI() {
+    if (callTimeout) clearTimeout(callTimeout);
     if (pc){ 
-        pc.getSenders().forEach(sender => pc.removeTrack(sender));
+        pc.getSenders().forEach(sender => {
+            if (sender.track){
+                sender.track.stop();
+            }
+            pc.removeTrack(sender);
+        });
         pc.close();
         pc = null;
     }
     const rv = document.getElementById("remoteVideo");
-    rv.srcObject = null;
-    rv.pause(); // Video ko stop karne ke liye
-    rv.load();
-    document.getElementById("remoteVideo").srcObject = null;
+    if (rv) {
+            rv.srcObject = null;
+            rv.pause(); // Video ko stop karne ke liye
+            rv.removeAttribute('src');
+            rv.load();
+    }
+    
     
     // Reset control buttons state
     isMuted = false;
     isVideoPaused = false;
+    isChatVisible = false;
+    unreadCount = 0;
+
     if(localStream) {
-        localStream.getAudioTracks()[0].enabled = true;
-        localStream.getVideoTracks()[0].enabled = true;
+        localStream.getTracks().forEach(t => t.stop());
+        localStream = null;
     }
     document.getElementById("muteBtn").innerText = "🎤 MUTE";
     document.getElementById("muteBtn").classList.remove('btn-active');
     document.getElementById("pauseVidBtn").innerText = "📹 PAUSE";
     document.getElementById("pauseVidBtn").classList.remove('btn-active');
+    document.getElementById("chatBadge").style.display = "none";
+    document.getElementById("chatContainer").style.display = "none";
+    document.getElementById("chatMessages").innerHTML = "";
 
     updateUIVorCall(false);
-    document.getElementById("incomingOverlay").style.display = "none";
-    document.getElementById("statusIndicator").innerText = "SERVER: ONLINE";
-    document.getElementById("statusIndicator").style.color = "#10b981";
+    
+    const status = document.getElementById("statusIndicator");
+    status.innerText = "SERVER: ONLINE";
+    status.style.color = "#10b981";
+
+  
 }
 
 // Start connection
