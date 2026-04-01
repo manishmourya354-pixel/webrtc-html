@@ -158,6 +158,9 @@
         <select id="deviceSelector" onchange="switchCamera(this.value)">
             <option value="">Detecting Devices...</option>
         </select>
+        <button onclick="toggleCameraFacing()" style="width: 100%; margin-top: 15px; padding: 10px; background: var(--morya-green); color: white; border: none; border-radius: 8px; cursor: pointer;">
+                🔄 Switch Front/Back
+        </button>
         <div class="menu-item" style="color:red; margin-top:50px;" onclick="toggleSidebar()">✖ Close Settings</div>
     </div>
 
@@ -201,6 +204,7 @@
         
         <div id="activeControls" class="active-controls">
             <button id="recBtn" class="btn" onclick="toggleRecord()" style="background:#f97316; color:white;">⏺ REC</button>
+            <span id="recTimer" style="color: red; font-size: 10px; font-weight: bold; display: none;">00:00</span>
             <button id="muteBtn" class="btn" onclick="toggleMute()">🎤 MUTE</button>
             <button id="pauseVidBtn" class="btn" onclick="toggleVideo()">📹 PAUSE</button>
             <button id="endBtn" class="btn" onclick="endCall()">🛑 END</button>
@@ -226,7 +230,9 @@ let isMuted = false;
 let isVideoPaused = false;
 let isChatVisible = false;
 let unreadCount = 0;
-
+let currentFacingMode = "user";
+let seconds = 0;    // <--- Ye add karein
+let recInterval;
 
 const config = {
     iceServers: [
@@ -482,6 +488,10 @@ function resetUI() {
     isChatVisible = false;
     unreadCount = 0;
 
+    if (typeof recInterval !== 'undefined') clearInterval(recInterval);
+    document.getElementById("recTimer").style.display = "none";
+    document.getElementById("recTimer").innerText = "00:00";
+
     if(localStream) {
         localStream.getTracks().forEach(t => t.stop());
         localStream = null;
@@ -554,9 +564,8 @@ async function switchCamera(deviceId) {
         // Purane track ko stop karein memory bachane ke liye
         const oldTrack = localStream.getVideoTracks()[0];
         if (oldTrack) oldTrack.stop();
-
         // Local stream update karein
-        localStream.removeTrack(oldVideoTrack);
+        localStream.removeTrack(oldTrack);
         localStream.addTrack(newVideoTrack);
         document.getElementById("localVideo").srcObject = localStream;
         
@@ -565,38 +574,78 @@ async function switchCamera(deviceId) {
         alert("Camera switch error! Mic/Cam permission check karein."); 
     }
 }
-
 // 3. Recording Logic (Sirf App ke liye)
 let mediaRecorder;
 let recordedChunks = [];
-
 function toggleRecord() {
     if (!window.pywebview) {
-        alert("Recording sirf Dr. Morya App mein available hai!");
-        return;
+        // Browser mein click disable karne ke liye alert hata kar sirf return kar do
+        return; 
     }
 
     const recBtn = document.getElementById("recBtn");
-    if (recBtn.innerText === "⏺ REC") {
+    const timerDisplay = document.getElementById("recTimer");
+    
+    // Check if NOT recording
+    if (recBtn.innerText.includes("REC")) {
         recordedChunks = [];
         mediaRecorder = new MediaRecorder(localStream);
         mediaRecorder.ondataavailable = (e) => recordedChunks.push(e.data);
-        mediaRecorder.onstop = async () => {
-            const blob = new Blob(recordedChunks, { type: 'video/webm' });
-            // Note: Professional recording ke liye blob ko server ya local save kiya jata hai
-            window.pywebview.api.toggle_recording("stop");
+        mediaRecorder.onstop = () => {
+            if(window.pywebview) window.pywebview.api.toggle_recording("stop");
         };
         mediaRecorder.start();
         window.pywebview.api.toggle_recording("start");
+        
         recBtn.innerText = "🛑 STOP";
         recBtn.style.background = "red";
+        timerDisplay.style.display = "block";
+        
+        seconds = 0;
+        recInterval = setInterval(() => {
+            seconds++;
+            let m = Math.floor(seconds / 60).toString().padStart(2, '0');
+            let s = (seconds % 60).toString().padStart(2, '0');
+            timerDisplay.innerText = `${m}:${s}`;
+        }, 1000);
     } else {
-        mediaRecorder.stop();
+        // Stop recording
+        if(mediaRecorder) mediaRecorder.stop();
+        clearInterval(recInterval);
         recBtn.innerText = "⏺ REC";
         recBtn.style.background = "#f97316";
+        timerDisplay.style.display = "none";
+        timerDisplay.innerText = "00:00";
     }
 }
+// --- toggleRecord ke neeche ye paste karein ---
+async function toggleCameraFacing() {
+    currentFacingMode = (currentFacingMode === "user") ? "environment" : "user";
+    
+    try {
+        const newStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: currentFacingMode, width: 1280, height: 720 },
+            audio: true
+        });
+        
+        const newVideoTrack = newStream.getVideoTracks()[0];    
+        if (pc) {
+            const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+            if (sender) sender.replaceTrack(newVideoTrack);
+        }
+        
+        const oldTrack = localStream.getVideoTracks()[0];
+        if (oldTrack) oldTrack.stop();
 
+        localStream.removeTrack(oldTrack);
+        localStream.addTrack(newVideoTrack);
+        document.getElementById("localVideo").srcObject = localStream;
+        
+    } catch (e) {
+        alert("Camera switch failed! Ho sakta hai device mein ek hi camera ho.");
+        console.error(e);
+    }
+}
 window.onload = connect;
 </script>
 </body>
