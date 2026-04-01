@@ -42,7 +42,7 @@
             border-radius: 12px; border: 3px solid var(--morya-green); 
             overflow: hidden; cursor: grab; z-index: 1000; 
             background: #000; touch-action: none;
-            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+            box-shadow: 0 10px 15px -33px rgba(0,0,0,0.1);
             /* Enable Resize */
             resize: both;
         }
@@ -106,7 +106,10 @@
         #chatHeader {
             background: var(--morya-green); color: white;padding: 10px;
             font-weight: bold;  font-size: 14px; text-align: center;
+            display: flex; justify-content: space-between; align-items: center;
         }
+        #closeChat { cursor: pointer; font-size: 18px; padding: 0 5px; }
+
         #chatMessages {
             flex: 1; padding: 10px;  overflow-y: auto;
             display: flex;  flex-direction: column;   gap: 8px; background: #f9fffb;
@@ -139,12 +142,14 @@
 
     <div id="topBar">
         <strong style="color: var(--morya-green); font-size: 18px;">Dr MORYA Brand of Health</strong>
-        <div style="display: flex; align-items: center; gap: 10px;"> <div id="statusIndicator">SERVER: WAKING UP...</div>
+        <div style="display: flex; align-items: center; gap: 10px;"> 
             <div id="chatIconContainer" onclick="toggleChat()" style="display:none; cursor:pointer; position:relative;">
                 <span style="font-size:20px;">💬</span>
                 <div id="chatBadge" style="position:absolute; top:-5px; right:-5px; background:red; color:white; border-radius:50%; width:15px; height:15px; font-size:10px; display:none; align-items:center; justify-content:center;">0</div>
             </div>
-        </div> </div>
+            <div id="statusIndicator">SERVER: WAKING UP...</div>
+        </div> 
+    </div>
 
     <div id="mainContainer">
         <video id="remoteVideo" autoplay playsinline></video>
@@ -155,7 +160,10 @@
     </div>
 
     <div id="chatContainer">
-        <div id="chatHeader">Dr. Morya Live Chat</div>
+        <div id="chatHeader">
+            <span>Dr. Morya Live Chat</span>
+            <span id="closeChat" onclick="toggleChat()">✖</span>
+        </div>
         <div id="chatMessages"></div>
         <div id="chatInputArea">
             <input type="text" id="chatInput" placeholder="Type a message...">
@@ -186,7 +194,7 @@
     </div>
 
 <script>
-let ws, pc, localStream,dataChannel;
+let ws, pc, localStream, dataChannel;
 let callTimeout = null;
 let pendingOffer = null;
 let isMuted = false;
@@ -205,9 +213,6 @@ function toggleChat() {
     }
 }
 
-
-
-// STUN settings (Original file se unchanged)
 const config = {
     iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
@@ -215,7 +220,6 @@ const config = {
     ]
 };
 
-// --- 2. Draggable Logic for Small Frame (Unchanged from original logic structure) ---
 const dragItem = document.getElementById("localFrame");
 let active = false;
 let currentX, currentY, initialX, initialY, xOffset = 0, yOffset = 0;
@@ -225,10 +229,8 @@ document.addEventListener("mousemove", drag);
 document.addEventListener("mouseup", dragEnd);
 
 function dragStart(e) {
-    // Prevent dragging when resizing (check if clicking near bottom-right corner)
     const rect = dragItem.getBoundingClientRect();
     if (e.clientX > rect.right - 20 && e.clientY > rect.bottom - 20) return;
-
     initialX = e.clientX - xOffset;
     initialY = e.clientY - yOffset;
     if (e.target === dragItem) active = true;
@@ -245,27 +247,21 @@ function drag(e) {
 }
 function dragEnd() { active = false; }
 
-// --- 2. Swap logic ONLY on small frame DOUBLE click ---
 dragItem.addEventListener('dblclick', swapVideos);
 
 function swapVideos() {
     const main = document.getElementById("remoteVideo");
     const small = document.getElementById("localVideo");
-    
     if(!main.srcObject || !small.srcObject) return;
-
     const tempStream = main.srcObject;
     main.srcObject = small.srcObject;
     small.srcObject = tempStream;
-    
-    // Maintain mute state for local video display
     small.muted = true; 
 }
-// Chat Bhejne ka Function
+
 function sendChatMessage() {
     const input = document.getElementById("chatInput");
     const msg = input.value.trim();
-    
     if (msg && dataChannel && dataChannel.readyState === "open") {
         dataChannel.send(msg);
         addMessageToUI(msg, 'sent');
@@ -273,7 +269,6 @@ function sendChatMessage() {
     }
 }
 
-// UI mein message dikhane ka function
 function addMessageToUI(msg, type) {
     const box = document.getElementById("chatMessages");
     const div = document.createElement("div");
@@ -285,28 +280,24 @@ function addMessageToUI(msg, type) {
         unreadCount++;
         const badge = document.getElementById("chatBadge");
         badge.innerText = unreadCount;
-        badge.style.display = "flex"; // Badge dikhao
+        badge.style.display = "flex";
     }
 }
 
-// Chat Setup Function (Ise createPeer ke andar dalna hoga)
 function setupDataChannel(channel) {
     dataChannel = channel;
     dataChannel.onmessage = (e) => addMessageToUI(e.data, 'received');
     dataChannel.onopen = () => console.log("Chat Channel Open");
 }
 
-// --- 1. WebSocket & Media (Original Logic unchanged) ---
 function connect() {
     const status = document.getElementById("statusIndicator");
     status.innerText = "SERVER: CONNECTING...";
-    
-    // Tumhara current server URL
     ws = new WebSocket("wss://webrtc-server-1-m4s8.onrender.com");
 
     ws.onopen = () => {
         status.innerText = "SERVER: ONLINE";
-        status.style.color = "#10b981"; // Green
+        status.style.color = "#10b981";
         ws.send(JSON.stringify({ type: "join", room: "room1" }));
         getMedia(); 
     };
@@ -318,36 +309,36 @@ function connect() {
             document.getElementById("incomingOverlay").style.display = "flex";
         } 
         else if (d.type === "answer") {
+            if (callTimeout) clearTimeout(callTimeout); // 2. Stop timeout on answer
             await pc.setRemoteDescription(new RTCSessionDescription(d.data));
             status.innerText = "STATUS: CONNECTED";
         }
         else if (d.type === "candidate") {
             if (pc) pc.addIceCandidate(new RTCIceCandidate(d.data)).catch(e => {});
         }
-        else if (d.type === "stop") resetUI();
+        else if (d.type === "stop") {
+            // 2. Auto-Reset if other side stops/disconnects
+            resetUI();
+        }
     };
 
     ws.onclose = () => {
         status.innerText = "SERVER: OFFLINE";
         status.style.color = "#ef4444";
-        setTimeout(connect, 5000); // Auto-retry
+        setTimeout(connect, 5000); 
     };
 }
 
 async function getMedia() {
     try {
         if (localStream) localStream.getTracks().forEach(t => t.stop());
-        // Original resolution unchanged
-            localStream = await navigator.mediaDevices.getUserMedia({
-                video: { width: 1280, height: 720 }, 
-                audio: {
-                    echoCancellation: true,      // Speaker ki awaaz mic mein wapas nahi jayegi
-                    noiseSuppression: true,      // Background fan/shor kam karega
-                    autoGainControl: true,       // Awaaz ko level pe rakhega
-                    googEchoCancellation: true,  // Chrome specific extra noise filter
-                    googNoiseSuppression: true
-                }
-            });
+        localStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: 1280, height: 720 }, 
+            audio: {
+                echoCancellation: true, noiseSuppression: true, autoGainControl: true,
+                googEchoCancellation: true, googNoiseSuppression: true
+            }
+        });
         document.getElementById("localVideo").srcObject = localStream;
     } catch (e) {
         console.error("Camera Error:", e);
@@ -359,17 +350,11 @@ async function createPeer() {
     if(pc) pc.close();
     pc = new RTCPeerConnection(config);
 
-    // --- CHAT DATA CHANNEL SETUP ---
     if (ws.readyState === WebSocket.OPEN) {
-        // Offer bhejne wala channel create karega
         dataChannel = pc.createDataChannel("chat");
         setupDataChannel(dataChannel);
     }
-    
-    // Answer dene wale ke liye channel receive karna
-    pc.ondatachannel = (event) => {
-        setupDataChannel(event.channel);
-    };
+    pc.ondatachannel = (event) => setupDataChannel(event.channel);
 
     pc.onicecandidate = e => {
         if (e.candidate) ws.send(JSON.stringify({ type: "candidate", data: e.candidate }));
@@ -380,10 +365,9 @@ async function createPeer() {
         document.getElementById("statusIndicator").innerText = "STATUS: STREAMING";
     };
 
-    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 }
 
-// --- 4. Call Actions with UI updates ---
 async function initiateCall() {
     await createPeer();
     const offer = await pc.createOffer();
@@ -392,13 +376,17 @@ async function initiateCall() {
     
     updateUIVorCall(true);
     document.getElementById("statusIndicator").innerText = "STATUS: CALLING...";
+    
+    // 2. Not Answered logic
     callTimeout = setTimeout(() => {
         if (pc && pc.iceConnectionState !== "connected" && pc.iceConnectionState !== "completed") {
             document.getElementById("statusIndicator").innerText = "STATUS: NOT ANSWERED";
             document.getElementById("statusIndicator").style.color = "#ef4444";
-            setTimeout(endCall, 3000); // 3 sec baad auto reset
+            // Send stop to clear other side too
+            ws.send(JSON.stringify({ type: "stop" }));
+            setTimeout(resetUI, 3000); 
         }
-    }, 50000); // 50 seconds timer
+    }, 50000); 
 }
 
 async function acceptCall() {
@@ -409,7 +397,6 @@ async function acceptCall() {
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
     ws.send(JSON.stringify({ type: "answer", data: answer }));
-    
     updateUIVorCall(true);
 }
 
@@ -419,13 +406,10 @@ function rejectCall() {
     pendingOffer = null;
 }
 
-// --- 4. Functionalities (Mute, Pause, End) ---
-
 function toggleMute() {
     if(!localStream) return;
     isMuted = !isMuted;
     localStream.getAudioTracks()[0].enabled = !isMuted;
-    
     const btn = document.getElementById("muteBtn");
     btn.innerText = isMuted ? "🔇 UNMUTED" : "🎤 MUTE";
     isMuted ? btn.classList.add('btn-active') : btn.classList.remove('btn-active');
@@ -435,7 +419,6 @@ function toggleVideo() {
     if(!localStream) return;
     isVideoPaused = !isVideoPaused;
     localStream.getVideoTracks()[0].enabled = !isVideoPaused;
-    
     const btn = document.getElementById("pauseVidBtn");
     btn.innerText = isVideoPaused ? "📹 PLAY VID" : "📹 PAUSE";
     isVideoPaused ? btn.classList.add('btn-active') : btn.classList.remove('btn-active');
@@ -446,7 +429,6 @@ function endCall() {
     resetUI();
 }
 
-// UI State Management
 function updateUIVorCall(inCall) {
     document.getElementById("callBtn").style.display = inCall ? "none" : "block";
     document.getElementById("activeControls").style.display = inCall ? "flex" : "none";
@@ -455,12 +437,11 @@ function updateUIVorCall(inCall) {
 }
 
 function resetUI() {
+    // 1 & 2. Reset everything and re-initialize
     if (callTimeout) clearTimeout(callTimeout);
     if (pc){ 
         pc.getSenders().forEach(sender => {
-            if (sender.track){
-                sender.track.stop();
-            }
+            if (sender.track) sender.track.stop();
             pc.removeTrack(sender);
         });
         pc.close();
@@ -468,14 +449,12 @@ function resetUI() {
     }
     const rv = document.getElementById("remoteVideo");
     if (rv) {
-            rv.srcObject = null;
-            rv.pause(); // Video ko stop karne ke liye
-            rv.removeAttribute('src');
-            rv.load();
+        rv.srcObject = null;
+        rv.pause();
+        rv.removeAttribute('src');
+        rv.load();
     }
     
-    
-    // Reset control buttons state
     isMuted = false;
     isVideoPaused = false;
     isChatVisible = false;
@@ -485,6 +464,7 @@ function resetUI() {
         localStream.getTracks().forEach(t => t.stop());
         localStream = null;
     }
+
     document.getElementById("muteBtn").innerText = "🎤 MUTE";
     document.getElementById("muteBtn").classList.remove('btn-active');
     document.getElementById("pauseVidBtn").innerText = "📹 PAUSE";
@@ -499,13 +479,21 @@ function resetUI() {
     status.innerText = "SERVER: ONLINE";
     status.style.color = "#10b981";
 
-  
+    // 1. Re-initialize camera for next call without page reload
+    getMedia();
 }
 
-// Start connection
 document.getElementById("chatInput").addEventListener("keypress", (e) => {
     if (e.key === "Enter") sendChatMessage();
 });
+
+// Render Server Keep-Alive
+setInterval(() => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "ping" }));
+    }
+}, 30000); 
+
 window.onload = connect;
 </script>
 </body>
