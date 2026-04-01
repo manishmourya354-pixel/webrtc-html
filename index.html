@@ -135,13 +135,37 @@
             background: var(--morya-green); color: white; border: none;
             margin-left: 5px; padding: 5px 12px;border-radius: 50%;cursor: pointer;
         }
-    
+        /* Sidebar Menu */
+        #settingsSidebar {
+            position: absolute; top: 0; left: -300px; width: 280px; height: 100%;
+            background: white; z-index: 3000; transition: 0.3s;
+            box-shadow: 5px 0 15px rgba(0,0,0,0.1); padding: 20px; box-sizing: border-box;
+        }
+        #settingsSidebar.active { left: 0; }
+        .menu-item { padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; font-size: 14px; }
+        .menu-item:hover { background: var(--bg-light); color: var(--morya-green); }
+
+        #menuIcon { font-size: 24px; cursor: pointer; margin-right: 10px; color: var(--morya-green); }
+        #deviceSelector { width: 100%; padding: 8px; margin-top: 15px; border-radius: 8px;border: 2px solid var(--morya-green);background: white; font-size: 14px; }
+            
     </style>
 </head>
 <body>
+    <div id="settingsSidebar">
+        <h3 style="color:var(--morya-green)">⚙️ Settings</h3>
+        
+        <label style="font-size: 12px; font-weight: bold;">SELECT CAMERA (INTERNAL/EXTERNAL):</label>
+        <select id="deviceSelector" onchange="switchCamera(this.value)">
+            <option value="">Detecting Devices...</option>
+        </select>
+        <div class="menu-item" style="color:red; margin-top:50px;" onclick="toggleSidebar()">✖ Close Settings</div>
+    </div>
 
     <div id="topBar">
-        <strong style="color: var(--morya-green); font-size: 18px;">Dr MORYA Brand of Health</strong>
+        <div style="display: flex; align-items: center;">
+            <span id="menuIcon" onclick="toggleSidebar()">☰</span>
+            <strong style="color: var(--morya-green); font-size: 18px;">Dr MORYA Brand of Health</strong>
+        </div>
         <div style="display: flex; align-items: center; gap: 10px;"> 
             <div id="chatIconContainer" onclick="toggleChat()" style="display:none; cursor:pointer; position:relative;">
                 <span style="font-size:20px;">💬</span>
@@ -176,6 +200,7 @@
         <button id="callBtn" class="btn" onclick="initiateCall()">📞 START CALL</button>
         
         <div id="activeControls" class="active-controls">
+            <button id="recBtn" class="btn" onclick="toggleRecord()" style="background:#f97316; color:white;">⏺ REC</button>
             <button id="muteBtn" class="btn" onclick="toggleMute()">🎤 MUTE</button>
             <button id="pauseVidBtn" class="btn" onclick="toggleVideo()">📹 PAUSE</button>
             <button id="endBtn" class="btn" onclick="endCall()">🛑 END</button>
@@ -202,16 +227,6 @@ let isVideoPaused = false;
 let isChatVisible = false;
 let unreadCount = 0;
 
-function toggleChat() {
-    const chat = document.getElementById("chatContainer");
-    isChatVisible = !isChatVisible;
-    chat.style.display = isChatVisible ? "flex" : "none";
-    
-    if (isChatVisible) {
-        unreadCount = 0;
-        document.getElementById("chatBadge").style.display = "none";
-    }
-}
 
 const config = {
     iceServers: [
@@ -219,11 +234,19 @@ const config = {
         { urls: "stun:stun1.l.google.com:19302" }
     ]
 };
+function toggleChat() {
+    const chat = document.getElementById("chatContainer");
+    isChatVisible = !isChatVisible;
+    chat.style.display = isChatVisible ? "flex" : "none";
+    if (isChatVisible) {
+        unreadCount = 0;
+        document.getElementById("chatBadge").style.display = "none";
+    }
+}
 
 const dragItem = document.getElementById("localFrame");
 let active = false;
 let currentX, currentY, initialX, initialY, xOffset = 0, yOffset = 0;
-
 dragItem.addEventListener("mousedown", dragStart);
 document.addEventListener("mousemove", drag);
 document.addEventListener("mouseup", dragEnd);
@@ -246,7 +269,6 @@ function drag(e) {
     }
 }
 function dragEnd() { active = false; }
-
 dragItem.addEventListener('dblclick', swapVideos);
 
 function swapVideos() {
@@ -386,7 +408,7 @@ async function initiateCall() {
             ws.send(JSON.stringify({ type: "stop" }));
             setTimeout(resetUI, 3000); 
         }
-    }, 50000); 
+    }, 30000); 
 }
 
 async function acceptCall() {
@@ -481,8 +503,13 @@ function resetUI() {
 
     // 1. Re-initialize camera for next call without page reload
     getMedia();
+    const recBtn = document.getElementById("recBtn");
+    if(recBtn) {
+        recBtn.innerText = "⏺ REC";
+        recBtn.style.background = "#f97316";
+    }
+    // ...
 }
-
 document.getElementById("chatInput").addEventListener("keypress", (e) => {
     if (e.key === "Enter") sendChatMessage();
 });
@@ -493,6 +520,82 @@ setInterval(() => {
         ws.send(JSON.stringify({ type: "ping" }));
     }
 }, 30000); 
+
+// 1. Sidebar aur Device Listing Logic
+function toggleSidebar() {
+    const sidebar = document.getElementById("settingsSidebar");
+    sidebar.classList.toggle("active");
+    if (sidebar.classList.contains("active")) {
+        navigator.mediaDevices.enumerateDevices().then(devices => {
+            const selector = document.getElementById("deviceSelector");
+            const videoDevices = devices.filter(d => d.kind === 'videoinput');
+            selector.innerHTML = videoDevices.map(d => 
+                `<option value="${d.deviceId}">${d.label || 'Camera ' + (selector.length + 1)}</option>`
+            ).join('');
+        });
+    }
+}
+
+// 2. Camera Switching (Multiple Device Support)
+async function switchCamera(deviceId) {
+    try {
+        const newStream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: deviceId }, width: 1280, height: 720 },
+            audio: true
+        });
+        
+        const newVideoTrack = newStream.getVideoTracks()[0];
+        
+        if (pc) {
+            const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+            if (sender) sender.replaceTrack(newVideoTrack);
+        }
+        
+        // Purane track ko stop karein memory bachane ke liye
+        const oldTrack = localStream.getVideoTracks()[0];
+        if (oldTrack) oldTrack.stop();
+
+        // Local stream update karein
+        localStream.removeTrack(oldVideoTrack);
+        localStream.addTrack(newVideoTrack);
+        document.getElementById("localVideo").srcObject = localStream;
+        
+    } catch (e) { 
+        console.error(e);
+        alert("Camera switch error! Mic/Cam permission check karein."); 
+    }
+}
+
+// 3. Recording Logic (Sirf App ke liye)
+let mediaRecorder;
+let recordedChunks = [];
+
+function toggleRecord() {
+    if (!window.pywebview) {
+        alert("Recording sirf Dr. Morya App mein available hai!");
+        return;
+    }
+
+    const recBtn = document.getElementById("recBtn");
+    if (recBtn.innerText === "⏺ REC") {
+        recordedChunks = [];
+        mediaRecorder = new MediaRecorder(localStream);
+        mediaRecorder.ondataavailable = (e) => recordedChunks.push(e.data);
+        mediaRecorder.onstop = async () => {
+            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+            // Note: Professional recording ke liye blob ko server ya local save kiya jata hai
+            window.pywebview.api.toggle_recording("stop");
+        };
+        mediaRecorder.start();
+        window.pywebview.api.toggle_recording("start");
+        recBtn.innerText = "🛑 STOP";
+        recBtn.style.background = "red";
+    } else {
+        mediaRecorder.stop();
+        recBtn.innerText = "⏺ REC";
+        recBtn.style.background = "#f97316";
+    }
+}
 
 window.onload = connect;
 </script>
